@@ -7,16 +7,16 @@
 
 window.DRIMS_CONFIG = {
   // --- Supabase (Settings → API in the Supabase dashboard) ---
-  SUPABASE_URL:       'https://YOUR_PROJECT.supabase.co',
-  SUPABASE_ANON_KEY:  'PASTE_YOUR_ANON_JWT_HERE',
+  SUPABASE_URL:       'https://zeaztlcopkvlfziwrmto.supabase.co',
+  SUPABASE_ANON_KEY:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplYXp0bGNvcGt2bGZ6aXdybXRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMzk1MzEsImV4cCI6MjA5MjYxNTUzMX0.T9fXxkmHOAH6g6IG4-krLXxuj7tqzOn54WDeHsqFh3Y',
 
   // --- ClickUp (from ClickUp URL: app.clickup.com/<workspace_id>/...) ---
-  CLICKUP_WORKSPACE_ID:        'YOUR_WORKSPACE_ID',
+  CLICKUP_WORKSPACE_ID:        '9013714387',
 
   // The folder where inspiration-library ClickUp docs get created.
   // Create a folder in your workspace and grab its ID from the URL
   // (app.clickup.com/.../f/<folder_id>).
-  CLICKUP_INSPIRATION_FOLDER_ID: 'YOUR_FOLDER_ID',
+  CLICKUP_INSPIRATION_FOLDER_ID: '901318110695',
 
   // --- App branding ---
   APP_NAME: 'DRIMS Creative HQ',
