@@ -4,499 +4,425 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>DRIMS Creative HQ</title>
-<meta name="theme-color" content="#4f46e5" />
+<meta name="theme-color" content="#1e1b4b" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
 <script src="/config.js"></script>
 <style>
 :root{
-  --indigo:#4f46e5; --indigo-d:#4338ca; --violet:#7c3aed; --cyan:#06b6d4;
-  --green:#10b981; --amber:#f59e0b; --red:#ef4444; --pink:#ec4899; --blue:#3b82f6;
-  --bg:#f5f6fb; --card:#ffffff; --ink:#0f172a; --mut:#64748b; --line:#e7e9f2;
-  --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
-  --radius:18px;
+  --indigo:#4f46e5; --indigo-d:#4338ca; --ink:#0f172a; --ink2:#1e293b;
+  --bg:#f8fafc; --card:#ffffff; --mut:#64748b; --mut2:#94a3b8; --line:#e2e8f0; --line2:#eef2f6;
+  --green:#16a34a; --amber:#d97706; --red:#dc2626; --blue:#2563eb; --teal:#0d9488; --violet:#7c3aed;
+  --shadow:0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+  --shadow-lg:0 10px 30px rgba(15,23,42,.08);
+  --radius:14px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{
-  background:var(--bg); color:var(--ink);
-  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  -webkit-font-smoothing:antialiased;
-}
-a{color:inherit}
+body{background:var(--bg);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em}
+a{color:var(--indigo);text-decoration:none}
 .hide{display:none!important}
+[data-lucide]{width:16px;height:16px;stroke-width:2}
+.muted{color:var(--mut)}
 
 /* ---------- Login ---------- */
-#login{
-  min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:24px;
-  background:radial-gradient(1200px 600px at 20% -10%,#6366f1 0,transparent 55%),
-             radial-gradient(1000px 500px at 100% 0,#7c3aed 0,transparent 50%),#0b1020;
-}
-.login-card{
-  width:100%; max-width:380px; background:var(--card); border-radius:24px; padding:32px 28px;
-  box-shadow:0 30px 80px rgba(2,6,23,.55);
-}
-.brandrow{display:flex; align-items:center; gap:11px; margin-bottom:6px}
-.logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--indigo),var(--violet));
-  display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px;box-shadow:0 6px 16px rgba(79,70,229,.4)}
-.login-card h1{font-size:20px;margin:0}
-.login-card .sub{color:var(--mut);font-size:13px;margin:2px 0 22px}
+#login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(900px 500px at 15% -10%,#312e81 0,transparent 55%),
+             radial-gradient(800px 500px at 100% 0,#1e1b4b 0,transparent 55%),#0b1020}
+.login-card{width:100%;max-width:376px;background:var(--card);border-radius:20px;padding:34px 30px;box-shadow:0 30px 80px rgba(2,6,23,.5)}
+.brandrow{display:flex;align-items:center;gap:11px;margin-bottom:18px}
+.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#4f46e5,#6366f1);
+  display:grid;place-items:center;color:#fff;box-shadow:0 6px 16px rgba(79,70,229,.35)}
+.logo [data-lucide]{width:20px;height:20px;color:#fff}
+.brandrow h1{font-size:18px;margin:0;font-weight:700;letter-spacing:-0.02em}
+.login-card .sub{color:var(--mut);font-size:13px;margin:0 0 22px}
 .field{margin-bottom:14px}
-.field label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin-bottom:6px}
-.field input{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;outline:none;transition:.15s}
-.field input:focus{border-color:var(--indigo);box-shadow:0 0 0 4px rgba(79,70,229,.12)}
-.btn{width:100%;padding:13px;border:0;border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--violet));
-  color:#fff;font-weight:700;font-size:15px;cursor:pointer;transition:.15s;box-shadow:0 8px 20px rgba(79,70,229,.35)}
-.btn:hover{transform:translateY(-1px)}.btn:active{transform:translateY(0)}.btn:disabled{opacity:.6;cursor:default;transform:none}
-.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:12px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+.field input{width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;outline:none;transition:.15s;font-family:inherit}
+.field input:focus{border-color:var(--indigo);box-shadow:0 0 0 4px rgba(79,70,229,.1)}
+.btn{width:100%;padding:12px;border:0;border-radius:10px;background:var(--indigo);color:#fff;font-weight:600;font-size:14px;
+  cursor:pointer;transition:.15s;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn:hover{background:var(--indigo-d)}.btn:disabled{opacity:.6;cursor:default}
+.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:9px;padding:10px 12px;font-size:13px;margin-top:12px}
 
-/* ---------- App shell ---------- */
+/* ---------- Shell ---------- */
 #app{min-height:100dvh;display:flex;flex-direction:column}
-.topbar{
-  position:sticky;top:0;z-index:20;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:11px 18px;
-}
-.topbar .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px;white-space:nowrap}
-.topbar .logo{width:30px;height:30px;font-size:15px;border-radius:9px}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:11px 20px}
+.topbar .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;letter-spacing:-0.02em;white-space:nowrap}
+.topbar .logo{width:28px;height:28px;border-radius:8px}.topbar .logo [data-lucide]{width:16px;height:16px}
 .grow{flex:1}
-.badge{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap}
-.badge .dot{width:8px;height:8px;border-radius:50%}
-.badge.fresh{background:#ecfdf5;color:#047857}.badge.fresh .dot{background:var(--green);box-shadow:0 0 0 3px rgba(16,185,129,.18)}
-.badge.stale{background:#fffbeb;color:#b45309}.badge.stale .dot{background:var(--amber)}
-.badge.dead{background:#fef2f2;color:#b91c1c}.badge.dead .dot{background:var(--red)}
+.badge{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;border:1px solid transparent}
+.badge [data-lucide]{width:13px;height:13px}
+.badge .dot{width:7px;height:7px;border-radius:50%}
+.badge.fresh{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}.badge.fresh .dot{background:var(--green)}
+.badge.stale{background:#fffbeb;color:#b45309;border-color:#fde68a}.badge.stale .dot{background:var(--amber)}
+.badge.dead{background:#fef2f2;color:#b91c1c;border-color:#fecaca}.badge.dead .dot{background:var(--red)}
 .who{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--mut)}
-.who .av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--blue));color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
-.linkbtn{background:none;border:0;color:var(--mut);font-size:13px;cursor:pointer;padding:6px;border-radius:8px}
-.linkbtn:hover{color:var(--ink);background:var(--bg)}
+.who .av{width:28px;height:28px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:600;font-size:12px}
+.iconbtn{background:none;border:0;color:var(--mut);cursor:pointer;padding:7px;border-radius:8px;display:grid;place-items:center}
+.iconbtn:hover{color:var(--ink);background:var(--bg)}.iconbtn [data-lucide]{width:17px;height:17px}
 
-.nav{display:flex;gap:4px;padding:10px 14px 0;overflow-x:auto;background:transparent}
-.nav button{flex:0 0 auto;border:0;background:none;padding:10px 16px;border-radius:11px;font-size:14px;font-weight:600;color:var(--mut);cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s}
-.nav button .ic{font-size:16px}
-.nav button.active{background:var(--card);color:var(--indigo);box-shadow:var(--shadow)}
+.nav{display:flex;gap:2px;padding:8px 14px 0;overflow-x:auto;border-bottom:1px solid var(--line);background:var(--card)}
+.nav button{flex:0 0 auto;border:0;background:none;padding:10px 14px;border-bottom:2px solid transparent;margin-bottom:-1px;
+  font-size:13.5px;font-weight:600;color:var(--mut);cursor:pointer;display:flex;align-items:center;gap:7px;transition:.12s;font-family:inherit}
+.nav button [data-lucide]{width:16px;height:16px}
+.nav button.active{color:var(--indigo);border-bottom-color:var(--indigo)}
 .nav button:hover:not(.active){color:var(--ink)}
 
-main{flex:1;width:100%;max-width:1240px;margin:0 auto;padding:18px}
-.stalebar{display:none;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:14px;padding:12px 16px;font-size:13.5px;margin-bottom:16px;align-items:center;gap:10px}
+main{flex:1;width:100%;max-width:1280px;margin:0 auto;padding:22px 20px}
+h3{margin:0;font-size:14px;font-weight:700;letter-spacing:-0.01em}
+.ph-sub{color:var(--mut);font-size:12.5px;margin:3px 0 0}
+.stalebar{display:none;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:11px;padding:11px 14px;font-size:13px;margin-bottom:16px;align-items:center;gap:9px}
+.stalebar [data-lucide]{width:16px;height:16px;flex:0 0 auto}
 .stalebar.show{display:flex}
 
-/* KPI cards */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:18px}
-.kpi{background:var(--card);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
-.kpi .ic{position:absolute;right:-6px;top:-6px;font-size:54px;opacity:.07}
-.kpi .n{font-size:30px;font-weight:800;line-height:1}
-.kpi .l{color:var(--mut);font-size:12.5px;font-weight:600;margin-top:6px;text-transform:uppercase;letter-spacing:.4px}
-.kpi.i .n{color:var(--indigo)}.kpi.g .n{color:var(--green)}.kpi.a .n{color:var(--amber)}.kpi.r .n{color:var(--red)}.kpi.v .n{color:var(--violet)}.kpi.c .n{color:var(--cyan)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:13px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;box-shadow:var(--shadow)}
+.kpi .kpi-ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;margin-bottom:11px;background:#eef2ff;color:var(--indigo)}
+.kpi .kpi-ic [data-lucide]{width:17px;height:17px}
+.kpi .n{font-size:26px;font-weight:800;line-height:1;letter-spacing:-0.02em}
+.kpi .l{color:var(--mut);font-size:12px;font-weight:500;margin-top:5px}
+.kpi.g .kpi-ic{background:#f0fdf4;color:var(--green)}.kpi.a .kpi-ic{background:#fffbeb;color:var(--amber)}
+.kpi.r .kpi-ic{background:#fef2f2;color:var(--red)}.kpi.b .kpi-ic{background:#eff6ff;color:var(--blue)}
+.kpi.t .kpi-ic{background:#f0fdfa;color:var(--teal)}.kpi.v .kpi-ic{background:#f5f3ff;color:var(--violet)}
 
-.panel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:18px}
-.panel h3{margin:0 0 4px;font-size:15px}
-.panel .ph-sub{color:var(--mut);font-size:12.5px;margin:0 0 14px}
-.charts{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
+.panel-h{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.panel-h [data-lucide]{width:16px;height:16px;color:var(--mut)}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .chart{height:300px;width:100%}
 
-/* Store / generic cards grid */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-.scard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;border-top:4px solid var(--indigo);transition:.15s}
-.scard:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(16,24,40,.12)}
-.scard .nm{font-weight:800;font-size:16px;margin-bottom:2px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:#eef2ff;color:var(--indigo)}
-.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
-.metric{background:var(--bg);border-radius:12px;padding:10px 12px}
-.metric .v{font-size:20px;font-weight:800}.metric .k{font-size:11px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.scard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px;transition:.14s}
+.scard:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.scard .nm{font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:space-between;gap:8px;letter-spacing:-0.01em}
+.pill{font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;background:#f1f5f9;color:var(--mut)}
+.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:13px}
+.metric{background:var(--bg);border-radius:10px;padding:9px 11px}
+.metric .v{font-size:19px;font-weight:700;letter-spacing:-0.01em}.metric .k{font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
 .metric.prod .v{color:var(--green)}.metric.pipe .v{color:var(--blue)}.metric.kill .v{color:var(--red)}.metric.win .v{color:var(--violet)}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-.tag{font-size:11px;background:#f1f5f9;color:#475569;padding:3px 9px;border-radius:999px}
-.tag.win{background:#f5f3ff;color:var(--violet)}
+.tag{font-size:11.5px;background:#f1f5f9;color:#475569;padding:3px 9px;border-radius:7px;display:inline-flex;align-items:center;gap:5px}
+.tag [data-lucide]{width:12px;height:12px}
 
-/* person card */
-.pcard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;border-left:5px solid var(--mut)}
-.pcard.over{border-left-color:var(--red)}.pcard.under{border-left-color:var(--amber)}.pcard.ontrack{border-left-color:var(--green)}.pcard.nodata{border-left-color:#cbd5e1}
-.pcard .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.pcard .nm{font-weight:800;font-size:16px}
-.bar{height:8px;background:#eef2f6;border-radius:6px;margin-top:6px;overflow:hidden}
-.bar>i{display:block;height:100%;border-radius:6px;background:var(--green)}
-.bar>i.amber{background:var(--amber)}.bar>i.red{background:var(--red)}
-.rowline{display:flex;justify-content:space-between;font-size:13px;color:var(--mut);margin-top:11px}
-.rowline b{color:var(--ink)}
-
-/* empty / placeholder */
-.empty{text-align:center;color:var(--mut);padding:46px 20px}
-.empty .big{font-size:40px;margin-bottom:8px}
-.empty h4{margin:0 0 6px;color:var(--ink);font-size:16px}
-.soon{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#eef2ff,#f5f3ff);color:var(--violet);
-  border:1px dashed #c7d2fe;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;margin-bottom:12px}
-.note{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--mut);margin-top:14px}
-
-select.sel{padding:10px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;background:#fff;font-weight:700;min-width:220px;color:var(--ink);outline:none}
-select.sel:focus{border-color:var(--indigo);box-shadow:0 0 0 4px rgba(79,70,229,.12)}
+select.sel{padding:9px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;background:#fff;font-weight:600;min-width:230px;color:var(--ink);outline:none;font-family:inherit}
+select.sel:focus{border-color:var(--indigo);box-shadow:0 0 0 4px rgba(79,70,229,.1)}
 .scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}
-table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
-table.tbl th{text-align:left;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:9px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
-table.tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+table.tbl th{text-align:left;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line)}
+table.tbl td{padding:10px;border-bottom:1px solid var(--line2);vertical-align:top}
 table.tbl tr:last-child td{border-bottom:0}
 table.tbl tbody tr:hover{background:var(--bg)}
-.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:#eef2ff;color:var(--indigo)}
-.chip.tof{background:#eff6ff;color:#2563eb}.chip.mof{background:#fef3c7;color:#b45309}.chip.bof{background:#dcfce7;color:#15803d}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:7px;background:#f1f5f9;color:#475569}
+.chip [data-lucide]{width:12px;height:12px}
+.chip.tof{background:#eff6ff;color:#2563eb}.chip.mof{background:#fffbeb;color:#b45309}.chip.bof{background:#f0fdf4;color:#15803d}
 .chip.win{background:#f5f3ff;color:var(--violet)}.chip.lose{background:#fef2f2;color:var(--red)}
-.minirow{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
-@media(max-width:820px){ table.tbl{min-width:620px} select.sel{width:100%} }
-.skeleton{background:linear-gradient(90deg,#eef1f7 25%,#f6f8fc 50%,#eef1f7 75%);background-size:200% 100%;animation:sh 1.2s infinite;border-radius:12px}
-@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.minirow{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+.empty{text-align:center;color:var(--mut);padding:44px 20px}
+.empty .ic{width:46px;height:46px;border-radius:12px;background:var(--bg);display:grid;place-items:center;margin:0 auto 12px}
+.empty .ic [data-lucide]{width:22px;height:22px;color:var(--mut2)}
+.empty h4{margin:0 0 5px;color:var(--ink);font-size:15px}.empty p{margin:0;font-size:13px}
+.soon{display:inline-flex;align-items:center;gap:6px;background:#eef2ff;color:var(--indigo);border-radius:7px;padding:4px 10px;font-size:11.5px;font-weight:600;margin-bottom:11px}
+.soon [data-lucide]{width:13px;height:13px}
+.ranklist{display:flex;flex-direction:column;gap:9px}
+.rankrow{display:flex;align-items:center;gap:11px}
+.rankrow .nm{width:130px;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rankrow .track{flex:1;height:9px;background:var(--line2);border-radius:6px;overflow:hidden}
+.rankrow .track i{display:block;height:100%;background:var(--indigo);border-radius:6px}
+.rankrow .v{width:34px;text-align:right;font-weight:700;font-size:13px}
 
-@media (max-width:820px){
+.pcard{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--mut2);border-radius:var(--radius);box-shadow:var(--shadow);padding:15px 17px}
+.pcard.over{border-left-color:var(--red)}.pcard.under{border-left-color:var(--amber)}.pcard.ontrack{border-left-color:var(--green)}
+.pcard .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pcard .nm{font-weight:700;font-size:15px}
+.bar{height:7px;background:var(--line2);border-radius:5px;margin-top:6px;overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:5px;background:var(--green)}.bar>i.amber{background:var(--amber)}.bar>i.red{background:var(--red)}
+.rowline{display:flex;justify-content:space-between;font-size:12.5px;color:var(--mut);margin-top:10px}.rowline b{color:var(--ink)}
+
+@media(max-width:820px){
   .charts{grid-template-columns:1fr}
-  main{padding:14px}
-  .topbar .who .em{display:none}
-  .nav{position:sticky;bottom:0;top:auto;order:9;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:8px 8px env(safe-area-inset-bottom);justify-content:space-between}
-  .nav button{flex:1;flex-direction:column;gap:3px;font-size:11px;padding:7px 4px}
-  .nav button .ic{font-size:19px}
-  #app{padding-bottom:0}
+  main{padding:16px 14px}
+  .topbar{padding:10px 14px}.topbar .who .em{display:none}
+  table.tbl{min-width:620px}.rankrow .nm{width:96px}
+  .nav{position:sticky;bottom:0;top:auto;order:9;border-top:1px solid var(--line);border-bottom:0;
+    padding:6px 6px env(safe-area-inset-bottom);justify-content:space-between}
+  .nav button{flex:1;flex-direction:column;gap:3px;font-size:10.5px;padding:7px 2px;border-bottom:0;margin-bottom:0}
+  .nav button.active{border-bottom:0}
 }
 </style>
 </head>
 <body>
 
-<!-- ================= LOGIN ================= -->
 <section id="login">
   <form class="login-card" id="loginForm" autocomplete="on">
-    <div class="brandrow"><div class="logo">D</div><h1>DRIMS Creative HQ</h1></div>
+    <div class="brandrow"><div class="logo"><i data-lucide="command"></i></div><h1>DRIMS Creative HQ</h1></div>
     <p class="sub">Team-only command center. Sign in to continue.</p>
     <div class="field"><label>Email</label><input id="email" type="email" required autocomplete="username" placeholder="you@drimsally.com"/></div>
-    <div class="field"><label>Password</label><input id="password" type="password" required autocomplete="current-password" placeholder="••••••••"/></div>
-    <button class="btn" id="loginBtn" type="submit">Sign in</button>
+    <div class="field"><label>Password</label><input id="password" type="password" required autocomplete="current-password" placeholder="Password"/></div>
+    <button class="btn" id="loginBtn" type="submit"><i data-lucide="log-in"></i>Sign in</button>
     <div class="err hide" id="loginErr"></div>
   </form>
 </section>
 
-<!-- ================= APP ================= -->
 <section id="app" class="hide">
   <header class="topbar">
-    <div class="brand"><div class="logo">D</div><span>Creative HQ</span></div>
+    <div class="brand"><div class="logo"><i data-lucide="command"></i></div><span>Creative HQ</span></div>
     <div class="grow"></div>
-    <span class="badge dead" id="syncBadge"><span class="dot"></span><span id="syncText">checking…</span></span>
+    <span class="badge dead" id="syncBadge"><span class="dot"></span><span id="syncText">checking</span></span>
     <div class="who"><span class="av" id="avatar">?</span><span class="em" id="userEmail"></span>
-      <button class="linkbtn" id="signOut" title="Sign out">Sign out</button></div>
+      <button class="iconbtn" id="signOut" title="Sign out"><i data-lucide="log-out"></i></button></div>
   </header>
-
   <nav class="nav" id="nav">
-    <button data-tab="overview" class="active"><span class="ic">📊</span>Overview</button>
-    <button data-tab="stores"><span class="ic">🏬</span>Stores</button>
-    <button data-tab="deepdive"><span class="ic">🔍</span>Store View</button>
-    <button data-tab="winners"><span class="ic">🏆</span>Winners</button>
-    <button data-tab="team"><span class="ic">👥</span>Team</button>
+    <button data-tab="overview" class="active"><i data-lucide="layout-dashboard"></i>Overview</button>
+    <button data-tab="stores"><i data-lucide="store"></i>Stores</button>
+    <button data-tab="deepdive"><i data-lucide="scan-search"></i>Store View</button>
+    <button data-tab="winners"><i data-lucide="award"></i>Winners</button>
+    <button data-tab="team"><i data-lucide="users"></i>Team</button>
   </nav>
-
   <main>
-    <div class="stalebar" id="staleBar"><span>⚠️</span><span id="staleMsg"></span></div>
+    <div class="stalebar" id="staleBar"><i data-lucide="alert-triangle"></i><span id="staleMsg"></span></div>
     <div id="view"></div>
   </main>
 </section>
 
 <script>
 const CFG = window.DRIMS_CONFIG || {};
-const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
-  auth:{persistSession:true, autoRefreshToken:true}
-});
+const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {auth:{persistSession:true,autoRefreshToken:true}});
 const $ = s => document.querySelector(s);
-const el = (h)=>{const d=document.createElement('div');d.innerHTML=h.trim();return d.firstChild;};
+const el = h => {const d=document.createElement('div');d.innerHTML=h.trim();return d.firstChild;};
 const charts = [];
 function mkChart(node,opt){const c=echarts.init(node);c.setOption(opt);charts.push(c);return c;}
+function icons(){ try{ lucide.createIcons(); }catch(e){} }
 window.addEventListener('resize',()=>charts.forEach(c=>c.resize()));
-const PAL=['#4f46e5','#10b981','#f59e0b','#7c3aed','#ef4444','#06b6d4','#ec4899','#3b82f6','#84cc16','#f97316'];
+// professional, restrained data palette
+const PAL=['#4f46e5','#0ea5e9','#14b8a6','#f59e0b','#8b5cf6','#64748b','#ec4899','#10b981','#f97316','#06b6d4'];
 
-let DATA = {stores:[], ads:[], angles:[], personas:[], team:[], sync:null};
-const LANES = {pipeline:'creative_pipeline', production:'production', winners:'winners_scalers', kill:'kill_list'};
+let DATA={products:[],ads:[],angles:[],personas:[],team:null,sync:null};
+const LANES={pipeline:'creative_pipeline',production:'production',winners:'winners_scalers',kill:'kill_list'};
 
-/* ---------- auth ---------- */
-$('#loginForm').addEventListener('submit', async (e)=>{
+/* auth */
+$('#loginForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const btn=$('#loginBtn'), errBox=$('#loginErr');
-  btn.disabled=true; btn.textContent='Signing in…'; errBox.classList.add('hide');
-  const {error} = await sb.auth.signInWithPassword({email:$('#email').value.trim(), password:$('#password').value});
-  btn.disabled=false; btn.textContent='Sign in';
-  if(error){ errBox.textContent=error.message||'Sign-in failed'; errBox.classList.remove('hide'); }
+  const btn=$('#loginBtn'),errBox=$('#loginErr');
+  btn.disabled=true;btn.textContent='Signing in…';errBox.classList.add('hide');
+  const {error}=await sb.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#password').value});
+  btn.disabled=false;btn.innerHTML='<i data-lucide="log-in"></i>Sign in';icons();
+  if(error){errBox.textContent=error.message||'Sign-in failed';errBox.classList.remove('hide');}
 });
-$('#signOut').addEventListener('click', async ()=>{ await sb.auth.signOut(); location.reload(); });
-
-sb.auth.onAuthStateChange((_e,session)=>{ session ? enterApp(session) : showLogin(); });
-sb.auth.getSession().then(({data})=> data.session ? enterApp(data.session) : showLogin());
-
-function showLogin(){ $('#login').classList.remove('hide'); $('#app').classList.add('hide'); }
+$('#signOut').addEventListener('click',async()=>{await sb.auth.signOut();location.reload();});
+sb.auth.onAuthStateChange((_e,s)=>s?enterApp(s):showLogin());
+sb.auth.getSession().then(({data})=>data.session?enterApp(data.session):showLogin());
+function showLogin(){$('#login').classList.remove('hide');$('#app').classList.add('hide');icons();}
 async function enterApp(session){
-  $('#login').classList.add('hide'); $('#app').classList.remove('hide');
-  const email = session.user.email||'';
-  $('#userEmail').textContent = email;
-  $('#avatar').textContent = (email[0]||'?').toUpperCase();
-  await loadAll();
-  routeTo(location.hash.replace('#','')||'overview');
+  $('#login').classList.add('hide');$('#app').classList.remove('hide');
+  const email=session.user.email||'';$('#userEmail').textContent=email;$('#avatar').textContent=(email[0]||'?').toUpperCase();
+  await loadAll();routeTo(location.hash.replace('#','')||'overview');
 }
 
-/* ---------- data ---------- */
-async function safe(table, q='select=*'){
-  try{
-    const {data,error} = await sb.from(table).select('*');
-    if(error){ console.warn(table,error.message); return []; }
-    return data||[];
-  }catch(e){ console.warn(table,e); return []; }
-}
+/* data */
+async function safe(t){try{const{data,error}=await sb.from(t).select('*');return error?[]:(data||[]);}catch(e){return[];}}
 async function loadAll(){
-  const [products, ads, angles, personas, sync] = await Promise.all([
-    safe('products'), safe('ads'), safe('angles'), safe('personas'), safe('sync_status')
-  ]);
-  let team = [];
-  try{ const {data}=await sb.from('team_status').select('*'); team=data||[]; }catch(e){ team=null; }
-  DATA = {products, ads, angles, personas,
-          team: team===null? null : team,
-          sync: (sync||[]).find(r=>r.id==='clickup_sync')||null};
+  const[products,ads,angles,personas,sync]=await Promise.all([safe('products'),safe('ads'),safe('angles'),safe('personas'),safe('sync_status')]);
+  let team=null;try{const{data,error}=await sb.from('team_status').select('*');team=error?null:(data||[]);}catch(e){team=null;}
+  DATA={products,ads,angles,personas,team,sync:(sync||[]).find(r=>r.id==='clickup_sync')||null};
   renderSyncBadge();
 }
-
-/* ---------- staleness badge ---------- */
 function renderSyncBadge(){
-  const s=DATA.sync, badge=$('#syncBadge'), txt=$('#syncText'), bar=$('#staleBar');
-  bar.classList.remove('show');
-  if(!s || !s.finished_at){
-    badge.className='badge dead'; txt.textContent='Never synced';
-    $('#staleMsg').textContent='The ClickUp → Supabase sync has not run yet. Data will appear once the Mac-Mini sync runs.';
-    bar.classList.add('show'); return;
-  }
-  const ageMs = Date.now()-new Date(s.finished_at).getTime();
-  const mins = Math.round(ageMs/60000);
-  const human = mins<1?'just now':mins<60?`${mins}m ago`:`${Math.round(mins/60)}h ago`;
-  if(s.ok && ageMs < 15*60000){ badge.className='badge fresh'; txt.textContent='Synced '+human; }
-  else if(s.ok && ageMs < 60*60000){ badge.className='badge stale'; txt.textContent='Synced '+human;
-    $('#staleMsg').textContent=`Last successful sync was ${human}. Data may be slightly behind.`; bar.classList.add('show'); }
-  else { badge.className='badge dead'; txt.textContent='Stale · '+human;
-    $('#staleMsg').textContent=`⚠ Sync is stale — last success ${human}. Numbers below may be out of date; check the Mac-Mini sync.`; bar.classList.add('show'); }
+  const s=DATA.sync,badge=$('#syncBadge'),txt=$('#syncText'),bar=$('#staleBar');bar.classList.remove('show');
+  if(!s||!s.finished_at){badge.className='badge dead';txt.textContent='Never synced';
+    $('#staleMsg').textContent='The ClickUp → Supabase sync has not run yet.';bar.classList.add('show');icons();return;}
+  const age=Date.now()-new Date(s.finished_at).getTime(),m=Math.round(age/6e4);
+  const h=m<1?'just now':m<60?m+'m ago':Math.round(m/60)+'h ago';
+  if(s.ok&&age<9e5){badge.className='badge fresh';txt.textContent='Synced '+h;}
+  else if(s.ok&&age<36e5){badge.className='badge stale';txt.textContent='Synced '+h;$('#staleMsg').textContent='Last successful sync was '+h+'. Data may be slightly behind.';bar.classList.add('show');}
+  else{badge.className='badge dead';txt.textContent='Stale · '+h;$('#staleMsg').textContent='Sync is stale — last success '+h+'. Numbers may be out of date.';bar.classList.add('show');}
+  icons();
 }
 
-/* ---------- helpers ---------- */
-const laneOf = a => (a.ad_origin||'').toLowerCase();
-function storeName(p){ return p.name || p.id; }
-function adsForStore(id){ return DATA.ads.filter(a=>a.product_id===id); }
-function countLane(ads,lane){ return ads.filter(a=>laneOf(a)===lane).length; }
-function uniq(arr){ return [...new Set(arr.filter(Boolean))]; }
+/* helpers */
+const laneOf=a=>(a.ad_origin||'').toLowerCase();
+const storeName=p=>p.name||p.id;
+const adsForStore=id=>DATA.ads.filter(a=>a.product_id===id);
+const countLane=(ads,l)=>ads.filter(a=>laneOf(a)===l).length;
+const uniq=a=>[...new Set(a.filter(Boolean))];
 
-/* ---------- routing ---------- */
-$('#nav').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) routeTo(b.dataset.tab); });
+/* routing */
+$('#nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b)routeTo(b.dataset.tab);});
 function routeTo(tab){
   location.hash=tab;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
-  ({overview:viewOverview, stores:viewStores, deepdive:viewDeepDive, winners:viewWinners, team:viewTeam}[tab]||viewOverview)();
+  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,team:viewTeam}[tab]||viewOverview)();
+  icons();
 }
 
-/* ---------- OVERVIEW ---------- */
+/* OVERVIEW */
 function viewOverview(){
-  const ads=DATA.ads, stores=DATA.products;
-  const total=ads.length, prod=countLane(ads,LANES.production), pipe=countLane(ads,LANES.pipeline),
-        win=countLane(ads,LANES.winners), kill=countLane(ads,LANES.kill);
-  const v=$('#view'); v.innerHTML='';
+  const ads=DATA.ads,stores=DATA.products,v=$('#view');v.innerHTML='';
+  const total=ads.length,prod=countLane(ads,LANES.production),pipe=countLane(ads,LANES.pipeline),
+        win=countLane(ads,LANES.winners),kill=countLane(ads,LANES.kill);
   v.appendChild(el(`<div class="kpis">
-    <div class="kpi i"><span class="ic">🏬</span><div class="n">${stores.length}</div><div class="l">Stores</div></div>
-    <div class="kpi v"><span class="ic">🎬</span><div class="n">${total}</div><div class="l">Creatives</div></div>
-    <div class="kpi c"><span class="ic">🧪</span><div class="n">${pipe}</div><div class="l">In pipeline</div></div>
-    <div class="kpi g"><span class="ic">🚀</span><div class="n">${prod}</div><div class="l">In production</div></div>
-    <div class="kpi r"><span class="ic">🗑️</span><div class="n">${kill}</div><div class="l">Killed</div></div>
-    <div class="kpi a"><span class="ic">🏆</span><div class="n">${win}</div><div class="l">Winners</div></div>
-  </div>`));
-
-  if(total===0){ v.appendChild(emptyState('No creatives yet','Once the ClickUp → Supabase sync runs, every store\'s creatives appear here automatically.')); return; }
-
+    ${kpi('store','i',stores.length,'Stores')}${kpi('clapperboard','v',total,'Creatives')}
+    ${kpi('flask-conical','b',pipe,'In pipeline')}${kpi('rocket','g',prod,'In production')}
+    ${kpi('trash-2','r',kill,'Killed')}${kpi('award','a',win,'Winners')}</div>`));
+  if(total===0){v.appendChild(emptyState('inbox','No creatives yet','Once the ClickUp → Supabase sync runs, every store\'s creatives appear here.'));icons();return;}
+  // FIXED chart: ranked, only stores that have creatives, descending
+  const ranked=stores.map(s=>({name:storeName(s),v:adsForStore(s.id).length})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+  const max=Math.max(1,...ranked.map(r=>r.v));
   v.appendChild(el(`<div class="charts">
-    <div class="panel"><h3>Creatives by store</h3><p class="ph-sub">Active creatives per brand</p><div class="chart" id="cByStore"></div></div>
-    <div class="panel"><h3>Production stage</h3><p class="ph-sub">Where creatives sit in the pipeline</p><div class="chart" id="cStage"></div></div>
+    <div class="panel"><div class="panel-h"><i data-lucide="bar-chart-3"></i><h3>Creatives by store</h3></div>
+      <div class="ranklist">${ranked.map((r,i)=>`<div class="rankrow"><span class="nm" title="${r.name}">${r.name}</span>
+        <span class="track"><i style="width:${Math.round(r.v/max*100)}%;background:${PAL[i%PAL.length]}"></i></span><span class="v">${r.v}</span></div>`).join('')}</div></div>
+    <div class="panel"><div class="panel-h"><i data-lucide="pie-chart"></i><h3>Production stage</h3></div><div class="chart" id="cStage" style="height:280px"></div></div>
   </div>`));
-  const byStore={}; stores.forEach(s=>byStore[s.id]=adsForStore(s.id).length);
-  mkChart($('#cByStore'),{tooltip:{trigger:'axis'},grid:{left:90,right:18,top:10,bottom:24},
-    xAxis:{type:'value',splitLine:{lineStyle:{color:'#eef1f7'}}},
-    yAxis:{type:'category',data:stores.map(storeName)},
-    series:[{type:'bar',data:stores.map((s,i)=>({value:byStore[s.id]||0,itemStyle:{color:PAL[i%PAL.length],borderRadius:[0,6,6,0]}}))}]});
   mkChart($('#cStage'),{tooltip:{trigger:'item'},legend:{bottom:0,textStyle:{color:'#64748b'}},
-    series:[{type:'pie',radius:['45%','72%'],center:['50%','44%'],itemStyle:{borderColor:'#fff',borderWidth:3,borderRadius:6},
-      data:[{name:'Pipeline',value:pipe,itemStyle:{color:'#3b82f6'}},{name:'Production',value:prod,itemStyle:{color:'#10b981'}},
-            {name:'Winners',value:win,itemStyle:{color:'#7c3aed'}},{name:'Killed',value:kill,itemStyle:{color:'#ef4444'}}]}]});
-
-  v.appendChild(el(`<div class="panel"><span class="soon">⏳ Coming as data flows · Phase 2</span>
-    <h3>Red zone — overdue & at-risk</h3>
-    <p class="ph-sub">Lights up once due-dates are captured from ClickUp. Right now no due-date data is synced, so this stays parked rather than showing false alarms.</p></div>`));
+    series:[{type:'pie',radius:['46%','72%'],center:['50%','44%'],itemStyle:{borderColor:'#fff',borderWidth:3,borderRadius:5},
+      label:{color:'#334155'},data:[{name:'Pipeline',value:pipe,itemStyle:{color:'#2563eb'}},{name:'Production',value:prod,itemStyle:{color:'#16a34a'}},
+            {name:'Winners',value:win,itemStyle:{color:'#7c3aed'}},{name:'Killed',value:kill,itemStyle:{color:'#dc2626'}}].filter(x=>x.value)}]});
+  v.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="clock"></i>Coming as data flows · Phase 2</span>
+    <div class="panel-h"><i data-lucide="alert-triangle"></i><h3>Red zone — overdue &amp; at-risk</h3></div>
+    <p class="ph-sub">Lights up once due-dates are captured from ClickUp. Parked rather than showing false alarms.</p></div>`));
+  icons();
 }
+const kpi=(ic,cls,n,l)=>`<div class="kpi ${cls}"><div class="kpi-ic"><i data-lucide="${ic}"></i></div><div class="n">${n}</div><div class="l">${l}</div></div>`;
 
-/* ---------- STORES ---------- */
+/* STORES */
 function viewStores(){
-  const v=$('#view'); v.innerHTML='';
-  if(DATA.products.length===0){ v.appendChild(emptyState('No stores yet','The sync creates one card per brand (14 stores) the first time it runs.')); return; }
+  const v=$('#view');v.innerHTML='';
+  if(!DATA.products.length){v.appendChild(emptyState('store','No stores yet','The sync creates one card per brand the first time it runs.'));icons();return;}
   const grid=el('<div class="grid"></div>');
   DATA.products.forEach((s,i)=>{
-    const ads=adsForStore(s.id);
-    const ang=DATA.angles.filter(a=>a.product_id===s.id);
-    const per=DATA.personas.filter(p=>p.product_id===s.id);
-    const c=el(`<div class="scard" style="border-top-color:${PAL[i%PAL.length]}">
-      <div class="nm">${storeName(s)} <span class="pill">${ads.length} creatives</span></div>
+    const ads=adsForStore(s.id),ang=DATA.angles.filter(a=>a.product_id===s.id),per=DATA.personas.filter(p=>p.product_id===s.id);
+    grid.appendChild(el(`<div class="scard">
+      <div class="nm">${storeName(s)}<span class="pill">${ads.length} creatives</span></div>
       <div class="metrics">
         <div class="metric pipe"><div class="v">${countLane(ads,LANES.pipeline)}</div><div class="k">Pipeline</div></div>
         <div class="metric prod"><div class="v">${countLane(ads,LANES.production)}</div><div class="k">Production</div></div>
         <div class="metric win"><div class="v">${countLane(ads,LANES.winners)}</div><div class="k">Winners</div></div>
-        <div class="metric kill"><div class="v">${countLane(ads,LANES.kill)}</div><div class="k">Killed</div></div>
-      </div>
-      <div class="tags">${ang.length?`<span class="tag">${ang.length} angles</span>`:''}${per.length?`<span class="tag">${per.length} personas</span>`:''}
-        ${uniq(ang.map(a=>a.name)).slice(0,3).map(n=>`<span class="tag">🎯 ${n}</span>`).join('')}</div>
-    </div>`);
-    grid.appendChild(c);
-  });
-  v.appendChild(grid);
-}
-
-/* ---------- WINNERS ---------- */
-function viewWinners(){
-  const v=$('#view'); v.innerHTML='';
-  v.appendChild(el(`<div class="panel"><span class="soon">🏆 Human-picked · Phase 1</span>
-    <h3>Winning creatives</h3>
-    <p class="ph-sub">Pulled live from your ClickUp <b>Winners / Scalers</b> lists. Metric-driven winners (ROAS / CTR) arrive in Phase 2 once Meta stats flow.</p></div>`));
-  const wins=DATA.ads.filter(a=>laneOf(a)===LANES.winners);
-  if(wins.length===0){ v.appendChild(emptyState('No winners flagged yet','Move a creative into a Winners / Scalers list in ClickUp and it shows up here after the next sync.')); return; }
-  const grid=el('<div class="grid"></div>');
-  const byStore={}; DATA.products.forEach(s=>byStore[s.id]=storeName(s));
-  wins.forEach((a,i)=>grid.appendChild(el(`<div class="scard" style="border-top-color:#7c3aed">
-    <div class="nm">${a.format_name||'Untitled creative'}</div>
-    <div class="tags"><span class="tag win">🏆 Winner</span><span class="tag">${byStore[a.product_id]||a.product_id||'—'}</span>
-      ${a.angle?`<span class="tag">🎯 ${a.angle}</span>`:''}${a.persona?`<span class="tag">👤 ${a.persona}</span>`:''}</div>
-    ${a.ad_link?`<div class="rowline"><span>Link</span><b><a href="${a.ad_link}" target="_blank">open ↗</a></b></div>`:''}
-  </div>`)));
-  v.appendChild(grid);
-}
-
-/* ---------- TEAM ---------- */
-function viewTeam(){
-  const v=$('#view'); v.innerHTML='';
-  if(DATA.team===null){
-    v.appendChild(el(`<div class="panel"><span class="soon">⏳ Phase 1 wiring</span><h3>Team capacity</h3>
-      <p class="ph-sub">The team dashboard (tasks per person · hours vs 48h Mon–Sat · video output) runs locally today. To show it here for everyone, the Mac-Mini sync writes it to Supabase — that step is being wired now.</p></div>`));
-    v.appendChild(emptyState('Team sync not connected yet','Once the <b>team_status</b> table is wired, per-person capacity appears here — same data as the local dashboard, live for the whole team.'));
-    return;
-  }
-  const team=DATA.team;
-  if(team.length===0){ v.appendChild(emptyState('No team data yet','Capacity appears after the first team sync run.')); return; }
-  const onTrack=team.filter(p=>p.status==='ontrack').length, under=team.filter(p=>p.status==='under').length, over=team.filter(p=>p.status==='over').length;
-  v.appendChild(el(`<div class="kpis">
-    <div class="kpi i"><span class="ic">👥</span><div class="n">${team.length}</div><div class="l">People</div></div>
-    <div class="kpi g"><span class="ic">✅</span><div class="n">${onTrack}</div><div class="l">On track</div></div>
-    <div class="kpi a"><span class="ic">📉</span><div class="n">${under}</div><div class="l">Under capacity</div></div>
-    <div class="kpi r"><span class="ic">🔥</span><div class="n">${over}</div><div class="l">Over 48h</div></div></div>`));
-  v.appendChild(el(`<div class="panel"><h3>Hours this week vs 48h</h3><div class="chart" id="cHours" style="height:${Math.max(220,team.length*38)}px"></div></div>`));
-  mkChart($('#cHours'),{tooltip:{trigger:'axis'},grid:{left:100,right:30,top:10,bottom:24},
-    xAxis:{type:'value',max:Math.max(48,...team.map(p=>p.hours_week||0))+4,splitLine:{lineStyle:{color:'#eef1f7'}}},
-    yAxis:{type:'category',data:team.map(p=>p.name)},
-    series:[{type:'bar',data:team.map(p=>({value:p.hours_week||0,itemStyle:{color:({over:'#ef4444',under:'#f59e0b',ontrack:'#10b981'}[p.status]||'#94a3b8'),borderRadius:[0,6,6,0]}})),
-      markLine:{silent:true,symbol:'none',lineStyle:{color:'#ef4444',type:'dashed'},data:[{xAxis:48}],label:{formatter:'48h'}}}]});
-  const grid=el('<div class="grid" style="margin-top:18px"></div>');
-  team.forEach(p=>{
-    const cls=p.status||'nodata', wk=p.hours_week==null?null:p.hours_week;
-    const fill=p.status==='over'?'red':p.status==='under'?'amber':'';
-    grid.appendChild(el(`<div class="pcard ${cls}">
-      <div class="top"><span class="nm">${p.name}</span><span class="tag ${p.is_editor?'win':''}">${p.is_editor?'editor':'team'}</span></div>
-      <div class="rowline"><span>Active tasks</span><b>${p.task_count??0}</b></div>
-      ${wk==null?`<div class="rowline"><span>Hours</span><b style="color:#94a3b8">no time data</b></div>`:
-        `<div class="rowline"><span>This week</span><b>${wk} / 48h</b></div><div class="bar"><i class="${fill}" style="width:${Math.min(100,Math.round(wk/48*100))}%"></i></div>`}
-      ${p.is_editor?`<div class="rowline"><span>Videos passed</span><b>${p.completed_videos??0}</b></div>`:''}
+        <div class="metric kill"><div class="v">${countLane(ads,LANES.kill)}</div><div class="k">Killed</div></div></div>
+      <div class="tags">${ang.length?`<span class="tag"><i data-lucide="target"></i>${ang.length} angles</span>`:''}${per.length?`<span class="tag"><i data-lucide="user"></i>${per.length} personas</span>`:''}</div>
     </div>`));
   });
-  v.appendChild(grid);
+  v.appendChild(grid);icons();
 }
 
-/* ---------- STORE VIEW (per-store deep dive) ---------- */
-// Confirmed status→stage map (degrades gracefully for stores with fewer statuses)
-const STAGE = {
-  'to do':'progress','in progress':'progress','queued':'progress',
-  'ready for review':'script_ready','reviewed - awaiting approval':'script_ready',
-  'rework':'rework','missing link':'blocked',
-  'ready for testing':'video_ready',
-  'testing':'testing','scale':'testing',
-  'winner':'winner','loser':'loser','complete':'done',
-};
-const stageOf = a => STAGE[(a.status||'').toLowerCase()] || 'other';
-const isWinner = a => stageOf(a)==='winner' || laneOf(a)===LANES.winners;
-const isLoser  = a => stageOf(a)==='loser'  || laneOf(a)===LANES.kill;
-let selectedStore = null;
-
+/* STORE VIEW (deep dive) */
+const STAGE={'to do':'progress','in progress':'progress','queued':'progress',
+  'ready for review':'script_ready','reviewed - awaiting approval':'script_ready','rework':'rework','missing link':'blocked',
+  'ready for testing':'video_ready','testing':'testing','scale':'testing','winner':'winner','loser':'loser','complete':'done'};
+const stageOf=a=>STAGE[(a.status||'').toLowerCase()]||'other';
+const isWinner=a=>stageOf(a)==='winner'||laneOf(a)===LANES.winners;
+const isLoser=a=>stageOf(a)==='loser'||laneOf(a)===LANES.kill;
+let selectedStore=null;
 function viewDeepDive(){
-  const v=$('#view'); v.innerHTML='';
-  const stores=DATA.products;
-  if(!stores.length){ v.appendChild(emptyState('No stores yet','Run the sync to populate stores.')); return; }
-  if(!selectedStore || !stores.find(s=>s.id===selectedStore)) selectedStore=stores[0].id;
-  v.appendChild(el(`<div class="panel" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <label style="font-weight:800;font-size:15px">🔍 Store</label>
+  const v=$('#view'),stores=DATA.products;v.innerHTML='';
+  if(!stores.length){v.appendChild(emptyState('scan-search','No stores yet','Run the sync to populate stores.'));icons();return;}
+  if(!selectedStore||!stores.find(s=>s.id===selectedStore))selectedStore=stores[0].id;
+  v.appendChild(el(`<div class="panel" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+    <div class="panel-h" style="margin:0"><i data-lucide="scan-search"></i><h3>Store</h3></div>
     <select class="sel" id="storeSel">${stores.map(s=>`<option value="${s.id}" ${s.id===selectedStore?'selected':''}>${storeName(s)}</option>`).join('')}</select>
-    <span class="grow"></span><span class="chip" id="ddTotal"></span></div>`));
+    <span class="grow"></span><span class="pill" id="ddTotal"></span></div>`));
   v.appendChild(el('<div id="ddBody"></div>'));
-  $('#storeSel').addEventListener('change',e=>{ selectedStore=e.target.value; renderDeepDive(); });
+  $('#storeSel').addEventListener('change',e=>{selectedStore=e.target.value;renderDeepDive();});
   renderDeepDive();
 }
-
 function renderDeepDive(){
   charts.length=0;
-  const ads=adsForStore(selectedStore);
-  const body=$('#ddBody'); body.innerHTML='';
+  const ads=adsForStore(selectedStore),body=$('#ddBody');body.innerHTML='';
   $('#ddTotal').textContent=`${ads.length} creatives`;
-  if(!ads.length){ body.appendChild(emptyState('No creatives in this store yet','As tasks land in this store\'s ClickUp lists, they appear here after the next 10-min sync.')); return; }
-
-  const c = s => ads.filter(a=>stageOf(a)===s).length;
-  const wins=ads.filter(isWinner), losers=ads.filter(isLoser);
+  if(!ads.length){body.appendChild(emptyState('inbox','No creatives in this store yet','As tasks land in this store\'s ClickUp lists, they appear after the next 10-min sync.'));icons();return;}
+  const c=s=>ads.filter(a=>stageOf(a)===s).length,wins=ads.filter(isWinner),losers=ads.filter(isLoser);
   body.appendChild(el(`<div class="kpis">
-    <div class="kpi c"><span class="ic">✍️</span><div class="n">${c('progress')}</div><div class="l">In progress</div></div>
-    <div class="kpi i"><span class="ic">📝</span><div class="n">${c('script_ready')}</div><div class="l">Scripts ready</div></div>
-    <div class="kpi v"><span class="ic">🎬</span><div class="n">${c('video_ready')}</div><div class="l">Videos ready</div></div>
-    <div class="kpi a"><span class="ic">🧪</span><div class="n">${c('testing')}</div><div class="l">Testing</div></div>
-    <div class="kpi g"><span class="ic">🏆</span><div class="n">${wins.length}</div><div class="l">Winners</div></div>
-    <div class="kpi r"><span class="ic">💀</span><div class="n">${losers.length}</div><div class="l">Losers</div></div>
-  </div>`));
-
-  // breakdown charts: hook type / funnel / tone
-  const tally=(key)=>{const m={};ads.forEach(a=>{const k=a[key]||'—';m[k]=(m[k]||0)+1;});return m;};
-  const enriched = ads.some(a=>a.hook_type||a.tone||a.funnel_stage);
+    ${kpi('pen-line','b',c('progress'),'In progress')}${kpi('file-text','i',c('script_ready'),'Scripts ready')}
+    ${kpi('clapperboard','v',c('video_ready'),'Videos ready')}${kpi('flask-conical','a',c('testing'),'Testing')}
+    ${kpi('award','g',wins.length,'Winners')}${kpi('x-circle','r',losers.length,'Losers')}</div>`));
+  const tally=k=>{const m={};ads.forEach(a=>{const x=a[k]||'—';m[x]=(m[x]||0)+1;});return m;};
+  const enriched=ads.some(a=>a.hook_type||a.tone||a.funnel_stage);
   if(enriched){
     body.appendChild(el(`<div class="charts">
-      <div class="panel"><h3>Angle types (Hook Type)</h3><div class="chart" id="cHook" style="height:260px"></div></div>
-      <div class="panel"><h3>Funnel stage</h3><div class="chart" id="cFunnel" style="height:260px"></div></div></div>
-      <div class="panel"><h3>Tone of video</h3><div class="chart" id="cTone" style="height:240px"></div></div>`));
+      <div class="panel"><div class="panel-h"><i data-lucide="git-branch"></i><h3>Angle types (Hook Type)</h3></div><div class="chart" id="cHook" style="height:250px"></div></div>
+      <div class="panel"><div class="panel-h"><i data-lucide="filter"></i><h3>Funnel stage</h3></div><div class="chart" id="cFunnel" style="height:250px"></div></div></div>
+      <div class="panel"><div class="panel-h"><i data-lucide="palette"></i><h3>Tone of video</h3></div><div class="chart" id="cTone" style="height:230px"></div></div>`));
     const pie=(node,obj)=>mkChart(node,{tooltip:{trigger:'item'},legend:{bottom:0,type:'scroll',textStyle:{color:'#64748b'}},
-      series:[{type:'pie',radius:['42%','70%'],center:['50%','44%'],itemStyle:{borderColor:'#fff',borderWidth:3,borderRadius:6},
+      series:[{type:'pie',radius:['44%','70%'],center:['50%','42%'],itemStyle:{borderColor:'#fff',borderWidth:3,borderRadius:5},label:{color:'#334155'},
         data:Object.entries(obj).map(([k,val],i)=>({name:k,value:val,itemStyle:{color:PAL[i%PAL.length]}}))}]});
-    pie($('#cHook'),tally('hook_type')); pie($('#cFunnel'),tally('funnel_stage')); pie($('#cTone'),tally('tone'));
+    pie($('#cHook'),tally('hook_type'));pie($('#cFunnel'),tally('funnel_stage'));pie($('#cTone'),tally('tone'));
   } else {
-    body.appendChild(el(`<div class="panel"><span class="soon">⏳ Enriching</span><h3>Angle types · Funnel · Tone</h3>
-      <p class="ph-sub">These breakdowns light up the moment the enriched sync runs (pulling Hook Type / Funnel Stage / Creative Tone from each ClickUp task). Counts above already reflect live status.</p></div>`));
+    body.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="loader"></i>Enriching</span>
+      <div class="panel-h"><i data-lucide="git-branch"></i><h3>Angle types · Funnel · Tone</h3></div>
+      <p class="ph-sub">These breakdowns light up the moment the enriched sync runs. Counts above already reflect live status.</p></div>`));
   }
-
-  // angles being tested — table grouped by Angle
-  const byAngle={};
-  ads.forEach(a=>{const k=a.angle||'(untagged)';(byAngle[k]=byAngle[k]||[]).push(a);});
+  const byAngle={};ads.forEach(a=>{const k=a.angle||'(untagged)';(byAngle[k]=byAngle[k]||[]).push(a);});
   const rows=Object.entries(byAngle).sort((x,y)=>y[1].length-x[1].length).map(([ang,list])=>{
-    const f=list[0], fs=(f.funnel_stage||'').toLowerCase();
-    return `<tr><td><b>${ang}</b></td><td>${list.length}</td>
-      <td>${f.hook_type?`<span class="chip">${f.hook_type}</span>`:'—'}</td>
-      <td>${f.funnel_stage?`<span class="chip ${fs}">${f.funnel_stage}</span>`:'—'}</td>
-      <td>${f.tone||'—'}</td><td>${f.persona||'—'}</td>
-      <td>${list.filter(isWinner).length?`<span class="chip win">${list.filter(isWinner).length}🏆</span>`:''}${list.filter(isLoser).length?`<span class="chip lose">${list.filter(isLoser).length}💀</span>`:''}</td></tr>`;
+    const f=list[0],fs=(f.funnel_stage||'').toLowerCase();
+    return `<tr><td><b>${ang}</b></td><td>${list.length}</td><td>${f.hook_type?`<span class="chip">${f.hook_type}</span>`:'—'}</td>
+      <td>${f.funnel_stage?`<span class="chip ${fs}">${f.funnel_stage}</span>`:'—'}</td><td>${f.tone||'—'}</td><td>${f.persona||'—'}</td>
+      <td>${list.filter(isWinner).length?`<span class="chip win">${list.filter(isWinner).length}</span>`:''}${list.filter(isLoser).length?`<span class="chip lose">${list.filter(isLoser).length}</span>`:''}</td></tr>`;
   }).join('');
-  body.appendChild(el(`<div class="panel"><h3>Angles being tested</h3><div class="scrollx"><table class="tbl">
-    <thead><tr><th>Angle</th><th>Creatives</th><th>Hook type</th><th>Funnel</th><th>Tone</th><th>Persona</th><th>Outcome</th></tr></thead>
-    <tbody>${rows}</tbody></table></div></div>`));
-
-  // personas tried
+  body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="target"></i><h3>Angles being tested</h3></div><div class="scrollx"><table class="tbl">
+    <thead><tr><th>Angle</th><th>Creatives</th><th>Hook type</th><th>Funnel</th><th>Tone</th><th>Persona</th><th>Outcome</th></tr></thead><tbody>${rows}</tbody></table></div></div>`));
   const personas=uniq(ads.map(a=>a.persona));
-  body.appendChild(el(`<div class="panel"><h3>Personas tried (${personas.length})</h3>
-    <div class="minirow">${personas.length?personas.map(p=>`<span class="tag">👤 ${p}</span>`).join(''):'<span class="ph-sub">No persona tags yet — fills in after enrichment.</span>'}</div></div>`));
-
-  // winners + losers lists
-  const list=(title,arr,cls)=>`<div class="panel"><h3>${title} (${arr.length})</h3>${arr.length?
-    `<div class="scrollx"><table class="tbl"><tbody>${arr.map(a=>`<tr><td><b>${a.format_name||'—'}</b></td><td>${a.angle||''}</td><td><span class="chip ${cls}">${a.status||''}</span></td>${a.ad_link?`<td><a href="${a.ad_link}" target="_blank">open ↗</a></td>`:'<td></td>'}</tr>`).join('')}</tbody></table></div>`
-    :'<p class="ph-sub">None yet.</p>'}</div>`;
-  body.appendChild(el(`<div class="charts">${list('🏆 Winners',wins,'win')}${list('💀 Losers',losers,'lose')}</div>`));
+  body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="users"></i><h3>Personas tried (${personas.length})</h3></div>
+    <div class="minirow">${personas.length?personas.map(p=>`<span class="tag"><i data-lucide="user"></i>${p}</span>`).join(''):'<span class="ph-sub">No persona tags yet — fills in after enrichment.</span>'}</div></div>`));
+  const list=(ic,title,arr,cls)=>`<div class="panel"><div class="panel-h"><i data-lucide="${ic}"></i><h3>${title} (${arr.length})</h3></div>${arr.length?
+    `<div class="scrollx"><table class="tbl"><tbody>${arr.map(a=>`<tr><td><b>${a.format_name||'—'}</b></td><td>${a.angle||''}</td><td><span class="chip ${cls}">${a.status||''}</span></td>${a.ad_link?`<td><a href="${a.ad_link}" target="_blank">open</a></td>`:'<td></td>'}</tr>`).join('')}</tbody></table></div>`:'<p class="ph-sub">None yet.</p>'}</div>`;
+  body.appendChild(el(`<div class="charts">${list('award','Winners',wins,'win')}${list('x-circle','Losers',losers,'lose')}</div>`));
+  icons();
 }
 
-function emptyState(title,msg){
-  return el(`<div class="panel"><div class="empty"><div class="big">📭</div><h4>${title}</h4><p>${msg}</p></div></div>`);
+/* WINNERS */
+function viewWinners(){
+  const v=$('#view');v.innerHTML='';
+  v.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="award"></i>Human-picked · Phase 1</span>
+    <div class="panel-h"><i data-lucide="trophy"></i><h3>Winning creatives</h3></div>
+    <p class="ph-sub">Pulled from your ClickUp Winners / Scalers lists. Metric-driven winners (ROAS / CTR) arrive in Phase 2.</p></div>`));
+  const wins=DATA.ads.filter(a=>laneOf(a)===LANES.winners||stageOf(a)==='winner');
+  if(!wins.length){v.appendChild(emptyState('award','No winners flagged yet','Move a creative into a Winners / Scalers list (or mark status winner) and it shows here after the next sync.'));icons();return;}
+  const byStore={};DATA.products.forEach(s=>byStore[s.id]=storeName(s));
+  const grid=el('<div class="grid"></div>');
+  wins.forEach(a=>grid.appendChild(el(`<div class="scard">
+    <div class="nm">${a.format_name||'Untitled'}</div>
+    <div class="tags"><span class="tag win"><i data-lucide="award"></i>Winner</span><span class="tag">${byStore[a.product_id]||a.product_id||'—'}</span>
+      ${a.angle?`<span class="tag"><i data-lucide="target"></i>${a.angle}</span>`:''}</div>
+    ${a.ad_link?`<div class="rowline"><span>Link</span><b><a href="${a.ad_link}" target="_blank">open</a></b></div>`:''}</div>`)));
+  v.appendChild(grid);icons();
 }
+
+/* TEAM */
+function viewTeam(){
+  const v=$('#view');v.innerHTML='';
+  if(DATA.team===null){
+    v.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="loader"></i>Phase 1 wiring</span>
+      <div class="panel-h"><i data-lucide="users"></i><h3>Team capacity</h3></div>
+      <p class="ph-sub">The team dashboard (tasks per person · hours vs 48h Mon–Sat · video output) runs locally today. To show it here, the Mac-Mini sync writes it to Supabase — being wired now.</p></div>`));
+    v.appendChild(emptyState('users','Team sync not connected yet','Once the team_status table is wired, per-person capacity appears here for the whole team.'));icons();return;}
+  if(!DATA.team.length){v.appendChild(emptyState('users','No team data yet','Capacity appears after the first team sync run.'));icons();return;}
+  const t=DATA.team;
+  v.appendChild(el(`<div class="kpis">${kpi('users','i',t.length,'People')}${kpi('check-circle','g',t.filter(p=>p.status==='ontrack').length,'On track')}
+    ${kpi('trending-down','a',t.filter(p=>p.status==='under').length,'Under capacity')}${kpi('flame','r',t.filter(p=>p.status==='over').length,'Over 48h')}</div>`));
+  v.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="clock"></i><h3>Hours this week vs 48h</h3></div><div class="chart" id="cHours" style="height:${Math.max(220,t.length*38)}px"></div></div>`));
+  mkChart($('#cHours'),{tooltip:{trigger:'axis'},grid:{left:100,right:30,top:10,bottom:24},
+    xAxis:{type:'value',max:Math.max(48,...t.map(p=>p.hours_week||0))+4,splitLine:{lineStyle:{color:'#eef1f7'}}},yAxis:{type:'category',data:t.map(p=>p.name)},
+    series:[{type:'bar',data:t.map(p=>({value:p.hours_week||0,itemStyle:{color:({over:'#dc2626',under:'#d97706',ontrack:'#16a34a'}[p.status]||'#94a3b8'),borderRadius:[0,5,5,0]}})),
+      markLine:{silent:true,symbol:'none',lineStyle:{color:'#dc2626',type:'dashed'},data:[{xAxis:48}],label:{formatter:'48h'}}}]});
+  const grid=el('<div class="grid" style="margin-top:16px"></div>');
+  t.forEach(p=>{const cls=p.status||'',wk=p.hours_week==null?null:p.hours_week,fill=p.status==='over'?'red':p.status==='under'?'amber':'';
+    grid.appendChild(el(`<div class="pcard ${cls}"><div class="top"><span class="nm">${p.name}</span><span class="tag">${p.is_editor?'editor':'team'}</span></div>
+      <div class="rowline"><span>Active tasks</span><b>${p.task_count??0}</b></div>
+      ${wk==null?`<div class="rowline"><span>Hours</span><b class="muted">no time data</b></div>`:`<div class="rowline"><span>This week</span><b>${wk} / 48h</b></div><div class="bar"><i class="${fill}" style="width:${Math.min(100,Math.round(wk/48*100))}%"></i></div>`}
+      ${p.is_editor?`<div class="rowline"><span>Videos passed</span><b>${p.completed_videos??0}</b></div>`:''}</div>`));});
+  v.appendChild(grid);icons();
+}
+
+function emptyState(ic,title,msg){
+  return el(`<div class="panel"><div class="empty"><div class="ic"><i data-lucide="${ic}"></i></div><h4>${title}</h4><p>${msg}</p></div></div>`);
+}
+icons();
 </script>
 </body>
 </html>
