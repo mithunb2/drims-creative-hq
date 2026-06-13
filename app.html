@@ -126,6 +126,19 @@ main{flex:1;width:100%;max-width:1240px;margin:0 auto;padding:18px}
   border:1px dashed #c7d2fe;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;margin-bottom:12px}
 .note{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--mut);margin-top:14px}
 
+select.sel{padding:10px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;background:#fff;font-weight:700;min-width:220px;color:var(--ink);outline:none}
+select.sel:focus{border-color:var(--indigo);box-shadow:0 0 0 4px rgba(79,70,229,.12)}
+.scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+table.tbl th{text-align:left;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:9px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+table.tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.tbl tr:last-child td{border-bottom:0}
+table.tbl tbody tr:hover{background:var(--bg)}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:#eef2ff;color:var(--indigo)}
+.chip.tof{background:#eff6ff;color:#2563eb}.chip.mof{background:#fef3c7;color:#b45309}.chip.bof{background:#dcfce7;color:#15803d}
+.chip.win{background:#f5f3ff;color:var(--violet)}.chip.lose{background:#fef2f2;color:var(--red)}
+.minirow{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+@media(max-width:820px){ table.tbl{min-width:620px} select.sel{width:100%} }
 .skeleton{background:linear-gradient(90deg,#eef1f7 25%,#f6f8fc 50%,#eef1f7 75%);background-size:200% 100%;animation:sh 1.2s infinite;border-radius:12px}
 @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
@@ -167,6 +180,7 @@ main{flex:1;width:100%;max-width:1240px;margin:0 auto;padding:18px}
   <nav class="nav" id="nav">
     <button data-tab="overview" class="active"><span class="ic">📊</span>Overview</button>
     <button data-tab="stores"><span class="ic">🏬</span>Stores</button>
+    <button data-tab="deepdive"><span class="ic">🔍</span>Store View</button>
     <button data-tab="winners"><span class="ic">🏆</span>Winners</button>
     <button data-tab="team"><span class="ic">👥</span>Team</button>
   </nav>
@@ -268,7 +282,7 @@ function routeTo(tab){
   location.hash=tab;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
-  ({overview:viewOverview, stores:viewStores, winners:viewWinners, team:viewTeam}[tab]||viewOverview)();
+  ({overview:viewOverview, stores:viewStores, deepdive:viewDeepDive, winners:viewWinners, team:viewTeam}[tab]||viewOverview)();
 }
 
 /* ---------- OVERVIEW ---------- */
@@ -387,6 +401,97 @@ function viewTeam(){
     </div>`));
   });
   v.appendChild(grid);
+}
+
+/* ---------- STORE VIEW (per-store deep dive) ---------- */
+// Confirmed status→stage map (degrades gracefully for stores with fewer statuses)
+const STAGE = {
+  'to do':'progress','in progress':'progress','queued':'progress',
+  'ready for review':'script_ready','reviewed - awaiting approval':'script_ready',
+  'rework':'rework','missing link':'blocked',
+  'ready for testing':'video_ready',
+  'testing':'testing','scale':'testing',
+  'winner':'winner','loser':'loser','complete':'done',
+};
+const stageOf = a => STAGE[(a.status||'').toLowerCase()] || 'other';
+const isWinner = a => stageOf(a)==='winner' || laneOf(a)===LANES.winners;
+const isLoser  = a => stageOf(a)==='loser'  || laneOf(a)===LANES.kill;
+let selectedStore = null;
+
+function viewDeepDive(){
+  const v=$('#view'); v.innerHTML='';
+  const stores=DATA.products;
+  if(!stores.length){ v.appendChild(emptyState('No stores yet','Run the sync to populate stores.')); return; }
+  if(!selectedStore || !stores.find(s=>s.id===selectedStore)) selectedStore=stores[0].id;
+  v.appendChild(el(`<div class="panel" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <label style="font-weight:800;font-size:15px">🔍 Store</label>
+    <select class="sel" id="storeSel">${stores.map(s=>`<option value="${s.id}" ${s.id===selectedStore?'selected':''}>${storeName(s)}</option>`).join('')}</select>
+    <span class="grow"></span><span class="chip" id="ddTotal"></span></div>`));
+  v.appendChild(el('<div id="ddBody"></div>'));
+  $('#storeSel').addEventListener('change',e=>{ selectedStore=e.target.value; renderDeepDive(); });
+  renderDeepDive();
+}
+
+function renderDeepDive(){
+  charts.length=0;
+  const ads=adsForStore(selectedStore);
+  const body=$('#ddBody'); body.innerHTML='';
+  $('#ddTotal').textContent=`${ads.length} creatives`;
+  if(!ads.length){ body.appendChild(emptyState('No creatives in this store yet','As tasks land in this store\'s ClickUp lists, they appear here after the next 10-min sync.')); return; }
+
+  const c = s => ads.filter(a=>stageOf(a)===s).length;
+  const wins=ads.filter(isWinner), losers=ads.filter(isLoser);
+  body.appendChild(el(`<div class="kpis">
+    <div class="kpi c"><span class="ic">✍️</span><div class="n">${c('progress')}</div><div class="l">In progress</div></div>
+    <div class="kpi i"><span class="ic">📝</span><div class="n">${c('script_ready')}</div><div class="l">Scripts ready</div></div>
+    <div class="kpi v"><span class="ic">🎬</span><div class="n">${c('video_ready')}</div><div class="l">Videos ready</div></div>
+    <div class="kpi a"><span class="ic">🧪</span><div class="n">${c('testing')}</div><div class="l">Testing</div></div>
+    <div class="kpi g"><span class="ic">🏆</span><div class="n">${wins.length}</div><div class="l">Winners</div></div>
+    <div class="kpi r"><span class="ic">💀</span><div class="n">${losers.length}</div><div class="l">Losers</div></div>
+  </div>`));
+
+  // breakdown charts: hook type / funnel / tone
+  const tally=(key)=>{const m={};ads.forEach(a=>{const k=a[key]||'—';m[k]=(m[k]||0)+1;});return m;};
+  const enriched = ads.some(a=>a.hook_type||a.tone||a.funnel_stage);
+  if(enriched){
+    body.appendChild(el(`<div class="charts">
+      <div class="panel"><h3>Angle types (Hook Type)</h3><div class="chart" id="cHook" style="height:260px"></div></div>
+      <div class="panel"><h3>Funnel stage</h3><div class="chart" id="cFunnel" style="height:260px"></div></div></div>
+      <div class="panel"><h3>Tone of video</h3><div class="chart" id="cTone" style="height:240px"></div></div>`));
+    const pie=(node,obj)=>mkChart(node,{tooltip:{trigger:'item'},legend:{bottom:0,type:'scroll',textStyle:{color:'#64748b'}},
+      series:[{type:'pie',radius:['42%','70%'],center:['50%','44%'],itemStyle:{borderColor:'#fff',borderWidth:3,borderRadius:6},
+        data:Object.entries(obj).map(([k,val],i)=>({name:k,value:val,itemStyle:{color:PAL[i%PAL.length]}}))}]});
+    pie($('#cHook'),tally('hook_type')); pie($('#cFunnel'),tally('funnel_stage')); pie($('#cTone'),tally('tone'));
+  } else {
+    body.appendChild(el(`<div class="panel"><span class="soon">⏳ Enriching</span><h3>Angle types · Funnel · Tone</h3>
+      <p class="ph-sub">These breakdowns light up the moment the enriched sync runs (pulling Hook Type / Funnel Stage / Creative Tone from each ClickUp task). Counts above already reflect live status.</p></div>`));
+  }
+
+  // angles being tested — table grouped by Angle
+  const byAngle={};
+  ads.forEach(a=>{const k=a.angle||'(untagged)';(byAngle[k]=byAngle[k]||[]).push(a);});
+  const rows=Object.entries(byAngle).sort((x,y)=>y[1].length-x[1].length).map(([ang,list])=>{
+    const f=list[0], fs=(f.funnel_stage||'').toLowerCase();
+    return `<tr><td><b>${ang}</b></td><td>${list.length}</td>
+      <td>${f.hook_type?`<span class="chip">${f.hook_type}</span>`:'—'}</td>
+      <td>${f.funnel_stage?`<span class="chip ${fs}">${f.funnel_stage}</span>`:'—'}</td>
+      <td>${f.tone||'—'}</td><td>${f.persona||'—'}</td>
+      <td>${list.filter(isWinner).length?`<span class="chip win">${list.filter(isWinner).length}🏆</span>`:''}${list.filter(isLoser).length?`<span class="chip lose">${list.filter(isLoser).length}💀</span>`:''}</td></tr>`;
+  }).join('');
+  body.appendChild(el(`<div class="panel"><h3>Angles being tested</h3><div class="scrollx"><table class="tbl">
+    <thead><tr><th>Angle</th><th>Creatives</th><th>Hook type</th><th>Funnel</th><th>Tone</th><th>Persona</th><th>Outcome</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`));
+
+  // personas tried
+  const personas=uniq(ads.map(a=>a.persona));
+  body.appendChild(el(`<div class="panel"><h3>Personas tried (${personas.length})</h3>
+    <div class="minirow">${personas.length?personas.map(p=>`<span class="tag">👤 ${p}</span>`).join(''):'<span class="ph-sub">No persona tags yet — fills in after enrichment.</span>'}</div></div>`));
+
+  // winners + losers lists
+  const list=(title,arr,cls)=>`<div class="panel"><h3>${title} (${arr.length})</h3>${arr.length?
+    `<div class="scrollx"><table class="tbl"><tbody>${arr.map(a=>`<tr><td><b>${a.format_name||'—'}</b></td><td>${a.angle||''}</td><td><span class="chip ${cls}">${a.status||''}</span></td>${a.ad_link?`<td><a href="${a.ad_link}" target="_blank">open ↗</a></td>`:'<td></td>'}</tr>`).join('')}</tbody></table></div>`
+    :'<p class="ph-sub">None yet.</p>'}</div>`;
+  body.appendChild(el(`<div class="charts">${list('🏆 Winners',wins,'win')}${list('💀 Losers',losers,'lose')}</div>`));
 }
 
 function emptyState(title,msg){
