@@ -1,20 +1,39 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/drims-creative-hq.html" },
-    { "source": "/install-skill.sh", "destination": "/skills/install-skill.sh" }
+    {
+      "source": "/",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/legacy",
+      "destination": "/drims-creative-hq.html"
+    },
+    {
+      "source": "/install-skill.sh",
+      "destination": "/skills/install-skill.sh"
+    }
   ],
   "headers": [
     {
       "source": "/install-skill.sh",
       "headers": [
-        { "key": "Content-Type", "value": "text/x-shellscript; charset=utf-8" },
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Content-Type",
+          "value": "text/x-shellscript; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     },
     {
       "source": "/skills/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     }
   ]
