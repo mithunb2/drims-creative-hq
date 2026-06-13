@@ -264,8 +264,8 @@ function routeTo(tab){
 /* OVERVIEW */
 function viewOverview(){
   const ads=DATA.ads,stores=DATA.products,v=$('#view');v.innerHTML='';
-  const total=ads.length,prod=countLane(ads,LANES.production),pipe=countLane(ads,LANES.pipeline),
-        win=countLane(ads,LANES.winners),kill=countLane(ads,LANES.kill);
+  const total=ads.length,prod=inProduction(ads),pipe=inPipeline(ads),
+        win=ads.filter(isWinner).length,kill=ads.filter(isLoser).length;
   v.appendChild(el(`<div class="kpis">
     ${kpi('store','i',stores.length,'Stores')}${kpi('clapperboard','v',total,'Creatives')}
     ${kpi('flask-conical','b',pipe,'In pipeline')}${kpi('rocket','g',prod,'In production')}
@@ -301,10 +301,10 @@ function viewStores(){
     grid.appendChild(el(`<div class="scard">
       <div class="nm">${storeName(s)}<span class="pill">${ads.length} creatives</span></div>
       <div class="metrics">
-        <div class="metric pipe"><div class="v">${countLane(ads,LANES.pipeline)}</div><div class="k">Pipeline</div></div>
-        <div class="metric prod"><div class="v">${countLane(ads,LANES.production)}</div><div class="k">Production</div></div>
-        <div class="metric win"><div class="v">${countLane(ads,LANES.winners)}</div><div class="k">Winners</div></div>
-        <div class="metric kill"><div class="v">${countLane(ads,LANES.kill)}</div><div class="k">Killed</div></div></div>
+        <div class="metric pipe"><div class="v">${inPipeline(ads)}</div><div class="k">Pipeline</div></div>
+        <div class="metric prod"><div class="v">${inProduction(ads)}</div><div class="k">Production</div></div>
+        <div class="metric win"><div class="v">${ads.filter(isWinner).length}</div><div class="k">Winners</div></div>
+        <div class="metric kill"><div class="v">${ads.filter(isLoser).length}</div><div class="k">Killed</div></div></div>
       <div class="tags">${ang.length?`<span class="tag"><i data-lucide="target"></i>${ang.length} angles</span>`:''}${per.length?`<span class="tag"><i data-lucide="user"></i>${per.length} personas</span>`:''}</div>
     </div>`));
   });
@@ -318,6 +318,12 @@ const STAGE={'to do':'progress','in progress':'progress','queued':'progress',
 const stageOf=a=>STAGE[(a.status||'').toLowerCase()]||'other';
 const isWinner=a=>stageOf(a)==='winner'||laneOf(a)===LANES.winners;
 const isLoser=a=>stageOf(a)==='loser'||laneOf(a)===LANES.kill;
+// Count board stage by STATUS, not by list — the team advances creatives by status
+// inside the Creative Pipeline list (the Production/Winners/Kill lists sit empty).
+const PIPE_STAGES=new Set(['progress','script_ready','rework','blocked']);
+const PROD_STAGES=new Set(['video_ready','testing']);
+const inPipeline=ads=>ads.filter(a=>PIPE_STAGES.has(stageOf(a))).length;
+const inProduction=ads=>ads.filter(a=>PROD_STAGES.has(stageOf(a))).length;
 let selectedStore=null;
 function viewDeepDive(){
   const v=$('#view'),stores=DATA.products;v.innerHTML='';
