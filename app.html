@@ -215,10 +215,18 @@ $('#loginForm').addEventListener('submit',async e=>{
   if(error){errBox.textContent=error.message||'Sign-in failed';errBox.classList.remove('hide');}
 });
 $('#signOut').addEventListener('click',async()=>{await sb.auth.signOut();location.reload();});
-sb.auth.onAuthStateChange((_e,s)=>s?enterApp(s):showLogin());
+// IMPORTANT: the onAuthStateChange callback runs INSIDE supabase-js's auth lock.
+// Doing async supabase work directly here (enterApp → loadAll → sb.from().select(),
+// which needs the same lock to read the token) DEADLOCKS on reload — loadAll hangs
+// forever on "checking". setTimeout(…,0) defers it OUT of the lock. (supabase-js docs.)
+sb.auth.onAuthStateChange((_e,s)=>setTimeout(()=>{s?enterApp(s):showLogin();},0));
 sb.auth.getSession().then(({data})=>data.session?enterApp(data.session):showLogin());
 function showLogin(){$('#login').classList.remove('hide');$('#app').classList.add('hide');icons();}
+let _entered=false;   // guard: on reload, onAuthStateChange(INITIAL_SESSION) AND getSession both
+                      // fire enterApp → two concurrent loadAll() runs deadlock supabase-js's auth
+                      // lock and the app hangs forever on "checking". Run enterApp once.
 async function enterApp(session){
+  if(_entered)return; _entered=true;
   $('#login').classList.add('hide');$('#app').classList.remove('hide');
   const email=session.user.email||'';$('#userEmail').textContent=email;$('#avatar').textContent=(email[0]||'?').toUpperCase();
   await loadAll();routeTo(location.hash.replace('#','')||'overview');
