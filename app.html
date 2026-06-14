@@ -392,6 +392,13 @@ function renderDeepDive(){
   const list=(ic,title,arr,cls)=>`<div class="panel"><div class="panel-h"><i data-lucide="${ic}"></i><h3>${title} (${arr.length})</h3></div>${arr.length?
     `<div class="scrollx"><table class="tbl"><tbody>${arr.map(a=>`<tr><td><b>${a.format_name||'—'}</b></td><td>${a.angle||''}</td><td><span class="chip ${cls}">${a.status||''}</span></td>${a.ad_link?`<td><a href="${a.ad_link}" target="_blank">open</a></td>`:'<td></td>'}</tr>`).join('')}</tbody></table></div>`:'<p class="ph-sub">None yet.</p>'}</div>`;
   body.appendChild(el(`<div class="charts">${list('award','Winners',wins,'win')}${list('x-circle','Losers',losers,'lose')}</div>`));
+  // In-context inspiration/winner manager — same shared write-loop component as the
+  // Inspirations tab, bound to THIS store (selectedStore). Add winners/inspirations
+  // right where you're looking at the creatives.
+  body.appendChild(el(`<div class="panel" style="margin-top:4px"><div class="panel-h"><i data-lucide="lightbulb"></i><h3>Winners &amp; inspirations for this store</h3></div>
+    <p class="ph-sub" style="margin-bottom:10px">Add winning/inspiration URLs here — writes to the Brand Brain and feeds the 60% winner-weighting on the next build.</p></div>`));
+  const _inspoBox=el('<div></div>');body.appendChild(_inspoBox);
+  _inspoManager(_inspoBox, selectedStore);
   icons();
 }
 
@@ -413,7 +420,8 @@ function viewWinners(){
   v.appendChild(grid);icons();
 }
 
-/* INSPIRATIONS (Piece 1: add/remove winner & inspiration URLs → Mini write loop) */
+/* INSPIRATIONS (Piece 1 write-loop). ONE shared manager used by BOTH the tab and the
+   Store View — container-scoped selectors so it can render in either place safely. */
 const INSPO_KINDS=[['winner_video','Winning video','award'],['inspiration_video','Inspiration video','lightbulb'],['winning_image','Winning image','image']];
 const _kindLabel=k=>(INSPO_KINDS.find(x=>x[0]===k)||[,k])[1];
 let inspoStore=null;
@@ -426,22 +434,24 @@ function viewInspo(){
     <div class="panel-h" style="margin:0"><i data-lucide="lightbulb"></i><h3>Inspirations &amp; Winners</h3></div>
     <select class="sel" id="inspoSel">${stores.map(s=>`<option value="${s.id}" ${s.id===inspoStore?'selected':''}>${storeName(s)}</option>`).join('')}</select>
     <span class="grow"></span><span class="ph-sub">Adds write to the Brand Brain (source of truth), then sync everywhere.</span></div>`));
-  v.appendChild(el('<div id="inspoBody"></div>'));
-  $('#inspoSel').addEventListener('change',e=>{inspoStore=e.target.value;_inspoBody();});
-  _inspoBody();icons();
+  const body=el('<div></div>');v.appendChild(body);
+  $('#inspoSel').addEventListener('change',e=>{inspoStore=e.target.value;_inspoManager(body,inspoStore);});
+  _inspoManager(body,inspoStore);icons();
 }
-async function _inspoBody(){
-  const body=$('#inspoBody');if(!body)return;body.innerHTML='<p class="ph-sub">Loading…</p>';
-  const slug=inspoStore;let live=[],q=[];
+// Shared component: renders add-form + live winners/inspirations + remove, for ANY
+// container + store slug. Identical write path (inspiration_queue) everywhere it's used.
+async function _inspoManager(body, slug){
+  if(!body)return;body.innerHTML='<p class="ph-sub">Loading…</p>';
+  let live=[],q=[];
   try{const r=await sb.from('store_inspirations').select('*').eq('product_id',slug).eq('live',true);live=r.data||[];}catch(e){}
   try{const r=await sb.from('inspiration_queue').select('*').eq('product_id',slug).order('queued_at',{ascending:false}).limit(20);q=r.data||[];}catch(e){}
   body.innerHTML='';
   body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="plus-circle"></i><h3>Add a winner or inspiration</h3></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-      <div class="field" style="margin:0"><label>Type</label><select class="sel" id="inKind">${INSPO_KINDS.map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></div>
-      <div class="field" style="margin:0;flex:1;min-width:240px"><label>URL</label><input id="inUrl" placeholder="https://…"></div>
-      <button class="btn" id="inAdd" style="width:auto"><i data-lucide="plus"></i>Add</button>
-    </div><div class="err hide" id="inErr"></div></div>`));
+      <div class="field" style="margin:0"><label>Type</label><select class="sel inKind">${INSPO_KINDS.map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></div>
+      <div class="field" style="margin:0;flex:1;min-width:240px"><label>URL</label><input class="inUrl" placeholder="https://…"></div>
+      <button class="btn inAdd" style="width:auto"><i data-lucide="plus"></i>Add</button>
+    </div><div class="err hide inErr"></div></div>`));
   const pend=q.filter(r=>r.status==='pending'||r.status==='failed');
   if(pend.length)body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="loader"></i><h3>Processing</h3></div>
     ${pend.map(r=>`<div class="rowline"><span>${r.action||'add'} · ${_kindLabel(r.kind)} · ${(r.url||'').slice(0,60)}</span>
@@ -454,19 +464,19 @@ async function _inspoBody(){
         :'<p class="ph-sub">None yet.</p>'}</div>`));
   });
   icons();
-  $('#inAdd').addEventListener('click',async()=>{
-    const kind=$('#inKind').value,url=$('#inUrl').value.trim(),errB=$('#inErr');
+  body.querySelector('.inAdd').addEventListener('click',async()=>{
+    const kind=body.querySelector('.inKind').value,url=body.querySelector('.inUrl').value.trim(),errB=body.querySelector('.inErr');
     if(!/^https?:\/\//i.test(url)){errB.textContent='Enter a valid URL (https://…)';errB.classList.remove('hide');return;}
-    $('#inAdd').disabled=true;
+    const btn=body.querySelector('.inAdd');btn.disabled=true;
     const {error}=await sb.from('inspiration_queue').insert([{ins_id:crypto.randomUUID(),product_id:slug,kind,url,action:'add',status:'pending',requested_by:($('#userEmail').textContent||'')}]);
-    $('#inAdd').disabled=false;
+    btn.disabled=false;
     if(error){errB.textContent=error.message;errB.classList.remove('hide');return;}
-    $('#inUrl').value='';_inspoBody();
+    _inspoManager(body,slug);
   });
   body.querySelectorAll('.inRm').forEach(b=>b.addEventListener('click',async()=>{
     b.disabled=true;
     await sb.from('inspiration_queue').insert([{ins_id:crypto.randomUUID(),product_id:slug,kind:b.dataset.kind,url:decodeURIComponent(b.dataset.url),action:'remove',status:'pending',requested_by:($('#userEmail').textContent||'')}]);
-    _inspoBody();
+    _inspoManager(body,slug);
   }));
 }
 
