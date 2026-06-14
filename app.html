@@ -435,9 +435,10 @@ function viewInspo(){
 // container + store slug. Identical write path (inspiration_queue) everywhere it's used.
 async function _inspoManager(body, slug){
   if(!body)return;body.innerHTML='<p class="ph-sub">Loading…</p>';
-  let live=[],q=[];
+  let live=[],q=[],gen=[];
   try{const r=await sb.from('store_inspirations').select('*').eq('product_id',slug).eq('live',true);live=r.data||[];}catch(e){}
   try{const r=await sb.from('inspiration_queue').select('*').eq('product_id',slug).order('queued_at',{ascending:false}).limit(20);q=r.data||[];}catch(e){}
+  try{const r=await sb.from('generated_scripts').select('*').eq('product_id',slug).eq('status','pending_review').order('created_at',{ascending:false}).limit(60);gen=r.data||[];}catch(e){}
   body.innerHTML='';
   body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="plus-circle"></i><h3>Add a winner or inspiration</h3></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
@@ -459,10 +460,32 @@ async function _inspoManager(body, slug){
   INSPO_KINDS.forEach(([k,label,ic])=>{
     const items=live.filter(r=>r.kind===k);
     body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="${ic}"></i><h3>${label}s (${items.length})</h3></div>
-      ${items.length?items.map(r=>`<div class="rowline"><a href="${r.url}" target="_blank" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%">${r.url}</a>
-        <button class="iconbtn inRm" data-kind="${k}" data-url="${encodeURIComponent(r.url)}" title="Remove"><i data-lucide="trash-2"></i></button></div>`).join('')
+      ${items.length?items.map(r=>{
+        const ref=(k==='winning_image'?(r.id||'').split('|').slice(2).join('|'):r.url);
+        return `<div class="rowline" style="gap:8px">
+        <a href="${r.url}" target="_blank" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${r.url}</a>
+        <input type="number" class="inN sel" min="1" max="25" value="5" style="width:60px;padding:6px" title="number of scripts">
+        <button class="btn inGen" data-ref="${encodeURIComponent(ref)}" data-kind="${k}" data-url="${encodeURIComponent(r.url)}" style="width:auto;padding:7px 12px"><i data-lucide="wand-2"></i>Run</button>
+        <button class="iconbtn inRm" data-kind="${k}" data-url="${encodeURIComponent(r.url)}" title="Remove"><i data-lucide="trash-2"></i></button></div>`;}).join('')
         :'<p class="ph-sub">None yet.</p>'}</div>`));
   });
+  // Generated scripts (reviewable-first) — grouped by source winner
+  if(gen.length){
+    const byWin={}; gen.forEach(g=>{(byWin[g.source_winner]=byWin[g.source_winner]||[]).push(g);});
+    const panel=el(`<div class="panel"><div class="panel-h"><i data-lucide="file-text"></i><h3>Generated scripts — pending review (${gen.length})</h3></div></div>`);
+    Object.entries(byWin).forEach(([win,gs])=>{
+      panel.appendChild(el(`<div class="ph-sub" style="margin:12px 0 4px;font-weight:600;color:var(--ink2)">${gs.length} from: …${String(win||'').slice(-46)}</div>`));
+      gs.forEach(g=>{const s=g.script||{};
+        panel.appendChild(el(`<div class="pcard" style="margin:8px 0">
+          <div class="nm">${s.concept_name||s.title||s.headline||'(concept)'} <span class="tag">${g.format||''}</span></div>
+          ${s.headline?`<div class="rowline"><span>Headline</span><b style="text-align:right;max-width:72%">${s.headline}</b></div>`:''}
+          ${(s.body_copy||s.script||s.script_30s)?`<p class="ph-sub" style="white-space:pre-wrap;margin-top:8px">${String(s.body_copy||s.script||s.script_30s)}</p>`:''}
+          ${s.visual_direction?`<div class="rowline"><span>Visual</span><span class="ph-sub" style="max-width:72%">${s.visual_direction}</span></div>`:''}
+          <div class="tags">${s.hook_mechanism?`<span class="chip">${s.hook_mechanism}</span>`:''}${s.persona?`<span class="chip">${s.persona}</span>`:''}${s.how_it_differs?`<span class="chip">distinct</span>`:''}</div>
+        </div>`));});
+    });
+    body.appendChild(panel);
+  }
   icons();
   body.querySelector('.inAdd').addEventListener('click',async()=>{
     const kind=body.querySelector('.inKind').value,errB=body.querySelector('.inErr'),btn=body.querySelector('.inAdd');
@@ -495,6 +518,16 @@ async function _inspoManager(body, slug){
     b.disabled=true;
     await sb.from('inspiration_queue').insert([{ins_id:crypto.randomUUID(),product_id:slug,kind:b.dataset.kind,url:decodeURIComponent(b.dataset.url),action:'remove',status:'pending',requested_by:($('#userEmail').textContent||'')}]);
     _inspoManager(body,slug);
+  }));
+  body.querySelectorAll('.inGen').forEach(b=>b.addEventListener('click',async()=>{
+    const row=b.closest('.rowline'), nEl=row&&row.querySelector('.inN');
+    let n=parseInt(nEl?nEl.value:'5',10); if(!Number.isFinite(n))n=5; n=Math.max(1,Math.min(25,n));
+    const kind=b.dataset.kind,url=decodeURIComponent(b.dataset.url||''),ref=decodeURIComponent(b.dataset.ref||'');
+    b.disabled=true;
+    const ins={ins_id:crypto.randomUUID(),product_id:slug,kind,url,action:'generate',gen_count:n,status:'pending',requested_by:($('#userEmail').textContent||'')};
+    if(kind==='winning_image')ins.storage_path=ref;   // image: ref is the storage path; video: url is the ref
+    await sb.from('inspiration_queue').insert([ins]);
+    _inspoManager(body,slug);   // shows it under "Processing"; scripts appear when the worker finishes
   }));
 }
 
