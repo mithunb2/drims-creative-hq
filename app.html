@@ -438,23 +438,30 @@ function viewTeam(){
   </style>`));}
 
   const t=DATA.team.slice();
+  // CAPACITY view = only people who actually track time. Two signals, both config/data
+  // driven (no hardcoded names in code): (1) no Jibble mapping → has_jibble=false; plus
+  // (2) a configurable exclude-list in config.js for people who HAVE a mapping but don't
+  // track (founders/media buyers — they surface under their real role elsewhere).
+  const EXCL=new Set((CFG.CAPACITY_EXCLUDE_IDS||[]).map(String));
+  const cap=t.filter(p=>p.has_jibble && !EXCL.has(String(p.id)));
+  const excluded=t.length-cap.length;
   // capacity target is carried per-row from the sync (the 48h rule) — not hardcoded here
-  const target=(t.find(p=>p.weekly_target)||{}).weekly_target||48;
+  const target=(cap.find(p=>p.weekly_target)||t.find(p=>p.weekly_target)||{}).weekly_target||48;
   const ST={over:{c:'#dc2626',l:'Over '+target+'h'},under:{c:'#d97706',l:'Has bandwidth'},
             ontrack:{c:'#16a34a',l:'On track'},'no-data':{c:'#94a3b8',l:'No time data'}};
   const sl=p=>ST[p.status]||ST['no-data'];
 
-  // KPIs
+  // KPIs (time-tracked team only)
   v.appendChild(el(`<div class="kpis">
-    ${kpi('users','i',t.length,'People')}
-    ${kpi('flame','r',t.filter(p=>p.status==='over').length,'Over '+target+'h')}
-    ${kpi('check-circle','g',t.filter(p=>p.status==='ontrack').length,'On track')}
-    ${kpi('battery-charging','a',t.filter(p=>p.status==='under').length,'Has bandwidth')}
-    ${kpi('clock','i',t.filter(p=>p.status==='no-data').length,'No time data')}</div>`));
+    ${kpi('users','i',cap.length,'Tracked team')}
+    ${kpi('flame','r',cap.filter(p=>p.status==='over').length,'Over '+target+'h')}
+    ${kpi('check-circle','g',cap.filter(p=>p.status==='ontrack').length,'On track')}
+    ${kpi('battery-charging','a',cap.filter(p=>p.status==='under').length,'Has bandwidth')}</div>`));
+  if(excluded)v.appendChild(el(`<p class="ph-sub" style="margin:-6px 0 14px"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i> ${excluded} teammate${excluded>1?'s':''} without time tracking excluded from capacity (shown under their role elsewhere).</p>`));
 
   // Who has bandwidth — least creative load first (ascending tasks, then hours), excluding overloaded.
   // Pure ordering from live data; no hardcoded thresholds.
-  const avail=t.filter(p=>p.status!=='over')
+  const avail=cap.filter(p=>p.status!=='over')
     .sort((a,b)=>((a.task_count||0)-(b.task_count||0))||((a.hours_week==null?1e9:a.hours_week)-(b.hours_week==null?1e9:b.hours_week)))
     .slice(0,6);
   v.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="battery-charging"></i><h3>Who has bandwidth for new work</h3></div>
@@ -463,11 +470,11 @@ function viewTeam(){
       :'<p class="ph-sub">Everyone is at or over capacity right now.</p>'}</div>`));
 
   // Hours vs target chart
-  v.appendChild(el(`<div class="panel" style="margin-top:16px"><div class="panel-h"><i data-lucide="clock"></i><h3>Hours this week vs ${target}h</h3></div><div class="chart" id="cHours" style="height:${Math.max(220,t.length*34)}px"></div></div>`));
+  v.appendChild(el(`<div class="panel" style="margin-top:16px"><div class="panel-h"><i data-lucide="clock"></i><h3>Hours this week vs ${target}h</h3></div><div class="chart" id="cHours" style="height:${Math.max(220,cap.length*34)}px"></div></div>`));
   mkChart($('#cHours'),{tooltip:{trigger:'axis'},grid:{left:110,right:30,top:10,bottom:24},
-    xAxis:{type:'value',max:Math.max(target,...t.map(p=>p.hours_week||0))+4,splitLine:{lineStyle:{color:'#eef1f7'}}},
-    yAxis:{type:'category',data:t.map(p=>p.name)},
-    series:[{type:'bar',data:t.map(p=>({value:p.hours_week||0,itemStyle:{color:sl(p).c,borderRadius:[0,5,5,0]}})),
+    xAxis:{type:'value',max:Math.max(target,...cap.map(p=>p.hours_week||0))+4,splitLine:{lineStyle:{color:'#eef1f7'}}},
+    yAxis:{type:'category',data:cap.map(p=>p.name)},
+    series:[{type:'bar',data:cap.map(p=>({value:p.hours_week||0,itemStyle:{color:sl(p).c,borderRadius:[0,5,5,0]}})),
       markLine:{silent:true,symbol:'none',lineStyle:{color:'#dc2626',type:'dashed'},data:[{xAxis:target}],label:{formatter:target+'h'}}}]});
 
   // capacity ring (SVG donut) — hours_week / target
@@ -478,9 +485,9 @@ function viewTeam(){
         stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 31 31)"/>
       <text x="31" y="35" text-anchor="middle" class="cringt">${pct==null?'—':pct+'%'}</text></svg>`;};
 
-  // Per-person advanced cards
+  // Per-person advanced cards (time-tracked team only)
   const grid=el('<div class="grid" style="margin-top:16px"></div>');
-  t.forEach(p=>{
+  cap.forEach(p=>{
     const s=sl(p),wk=p.hours_week,pct=wk==null?null:Math.round(wk/target*100);
     const chips=Object.entries(p.statuses||{}).sort((a,b)=>b[1]-a[1])
       .map(([k,n])=>`<span class="chip">${n} ${k}</span>`).join('')||'<span class="ph-sub">No active tasks</span>';

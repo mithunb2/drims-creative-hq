@@ -18,6 +18,18 @@ window.DRIMS_CONFIG = {
   // (app.clickup.com/.../f/<folder_id>).
   CLICKUP_INSPIRATION_FOLDER_ID: '901318110695',
 
+  // --- Team capacity view ---
+  // People with a Jibble mapping but who don't actually track time (founders /
+  // media buyers). Excluded from the capacity/hours view by stable ClickUp user id.
+  // (People with NO Jibble mapping are already excluded automatically.)
+  // Edit this list to change who's excluded — no code change needed.
+  CAPACITY_EXCLUDE_IDS: [
+    '126242856', // Mithun Sharma (founder)
+    '88022265',  // Deepa Ch
+    '88004300',  // GSiddharth Shinge (Sid — media buyer)
+    '100048167', // Sourabh (media buyer)
+  ],
+
   // --- App branding ---
   APP_NAME: 'DRIMS Creative HQ',
   // localStorage keys are namespaced by this so multiple DRIMS tools on the
