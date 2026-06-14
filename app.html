@@ -358,13 +358,18 @@ function renderDeepDive(){
   const tally=k=>{const m={};ads.forEach(a=>{const x=a[k]||'—';m[x]=(m[x]||0)+1;});return m;};
   const enriched=ads.some(a=>a.hook_type||a.tone||a.funnel_stage);
   if(enriched){
-    body.appendChild(el(`<div class="charts">
-      <div class="panel"><div class="panel-h"><i data-lucide="git-branch"></i><h3>Angle types (Hook Type)</h3></div><div class="chart" id="cHook" style="height:250px"></div></div>
-      <div class="panel"><div class="panel-h"><i data-lucide="filter"></i><h3>Funnel stage</h3></div><div class="chart" id="cFunnel" style="height:250px"></div></div></div>
-      <div class="panel"><div class="panel-h"><i data-lucide="palette"></i><h3>Tone of video</h3></div><div class="chart" id="cTone" style="height:230px"></div></div>`));
-    const pie=(node,obj)=>mkChart(node,{tooltip:{trigger:'item'},legend:{bottom:0,type:'scroll',textStyle:{color:'#64748b'}},
+    // NOTE: wrap in ONE container — el() returns only firstChild, so the cTone panel
+    // (previously a sibling of .charts) was being dropped → pie($('#cTone')) hit a null
+    // node → echarts threw → renderDeepDive aborted before icons()/tables ran (that was
+    // the "empty KPI icons + missing sections" bug).
+    body.appendChild(el(`<div>
+      <div class="charts">
+        <div class="panel"><div class="panel-h"><i data-lucide="git-branch"></i><h3>Angle types (Hook Type)</h3></div><div class="chart" id="cHook" style="height:250px"></div></div>
+        <div class="panel"><div class="panel-h"><i data-lucide="filter"></i><h3>Funnel stage</h3></div><div class="chart" id="cFunnel" style="height:250px"></div></div></div>
+      <div class="panel"><div class="panel-h"><i data-lucide="palette"></i><h3>Tone of video</h3></div><div class="chart" id="cTone" style="height:230px"></div></div></div>`));
+    const pie=(node,obj)=>{if(!node)return;mkChart(node,{tooltip:{trigger:'item'},legend:{bottom:0,type:'scroll',textStyle:{color:'#64748b'}},
       series:[{type:'pie',radius:['44%','70%'],center:['50%','42%'],itemStyle:{borderColor:'#fff',borderWidth:3,borderRadius:5},label:{color:'#334155'},
-        data:Object.entries(obj).map(([k,val],i)=>({name:k,value:val,itemStyle:{color:PAL[i%PAL.length]}}))}]});
+        data:Object.entries(obj).map(([k,val],i)=>({name:k,value:val,itemStyle:{color:PAL[i%PAL.length]}}))}]});};
     pie($('#cHook'),tally('hook_type'));pie($('#cFunnel'),tally('funnel_stage'));pie($('#cTone'),tally('tone'));
   } else {
     body.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="loader"></i>Enriching</span>
