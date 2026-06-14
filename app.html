@@ -403,25 +403,82 @@ function viewWinners(){
 function viewTeam(){
   const v=$('#view');v.innerHTML='';
   if(DATA.team===null){
-    v.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="loader"></i>Phase 1 wiring</span>
+    v.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="loader"></i>Connecting</span>
       <div class="panel-h"><i data-lucide="users"></i><h3>Team capacity</h3></div>
-      <p class="ph-sub">The team dashboard (tasks per person · hours vs 48h Mon–Sat · video output) runs locally today. To show it here, the Mac-Mini sync writes it to Supabase — being wired now.</p></div>`));
-    v.appendChild(emptyState('users','Team sync not connected yet','Once the team_status table is wired, per-person capacity appears here for the whole team.'));icons();return;}
+      <p class="ph-sub">Per-person tasks, capacity and bandwidth appear here once the team sync connects.</p></div>`));
+    v.appendChild(emptyState('users','Team sync not connected yet','Per-person capacity appears here once the team sync runs.'));icons();return;}
   if(!DATA.team.length){v.appendChild(emptyState('users','No team data yet','Capacity appears after the first team sync run.'));icons();return;}
-  const t=DATA.team;
-  v.appendChild(el(`<div class="kpis">${kpi('users','i',t.length,'People')}${kpi('check-circle','g',t.filter(p=>p.status==='ontrack').length,'On track')}
-    ${kpi('trending-down','a',t.filter(p=>p.status==='under').length,'Under capacity')}${kpi('flame','r',t.filter(p=>p.status==='over').length,'Over 48h')}</div>`));
-  v.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="clock"></i><h3>Hours this week vs 48h</h3></div><div class="chart" id="cHours" style="height:${Math.max(220,t.length*38)}px"></div></div>`));
-  mkChart($('#cHours'),{tooltip:{trigger:'axis'},grid:{left:100,right:30,top:10,bottom:24},
-    xAxis:{type:'value',max:Math.max(48,...t.map(p=>p.hours_week||0))+4,splitLine:{lineStyle:{color:'#eef1f7'}}},yAxis:{type:'category',data:t.map(p=>p.name)},
-    series:[{type:'bar',data:t.map(p=>({value:p.hours_week||0,itemStyle:{color:({over:'#dc2626',under:'#d97706',ontrack:'#16a34a'}[p.status]||'#94a3b8'),borderRadius:[0,5,5,0]}})),
-      markLine:{silent:true,symbol:'none',lineStyle:{color:'#dc2626',type:'dashed'},data:[{xAxis:48}],label:{formatter:'48h'}}}]});
+
+  // scoped styling (injected once) — capacity rings, status colours, chips
+  if(!document.getElementById('teamcss')){document.head.appendChild(el(`<style id="teamcss">
+  .pcard.over{border-left-color:#dc2626}.pcard.under{border-left-color:#d97706}
+  .pcard.ontrack{border-left-color:#16a34a}.pcard.no-data{border-left-color:#94a3b8}
+  .tcard-h{display:flex;align-items:center;gap:15px}.cring{flex:0 0 auto}
+  .cringt{font-size:13px;font-weight:800;fill:#334155}
+  .tbig{font-size:25px;font-weight:800;line-height:1;letter-spacing:-.02em}
+  .tbiglab{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+  .tname{font-weight:700;font-size:14px;margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .stchips{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px}
+  .bw-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+  .bw-row:last-child{border-bottom:none}.bw-name{font-weight:600;font-size:13px}
+  .stat-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.4px}
+  </style>`));}
+
+  const t=DATA.team.slice();
+  // capacity target is carried per-row from the sync (the 48h rule) — not hardcoded here
+  const target=(t.find(p=>p.weekly_target)||{}).weekly_target||48;
+  const ST={over:{c:'#dc2626',l:'Over '+target+'h'},under:{c:'#d97706',l:'Has bandwidth'},
+            ontrack:{c:'#16a34a',l:'On track'},'no-data':{c:'#94a3b8',l:'No time data'}};
+  const sl=p=>ST[p.status]||ST['no-data'];
+
+  // KPIs
+  v.appendChild(el(`<div class="kpis">
+    ${kpi('users','i',t.length,'People')}
+    ${kpi('flame','r',t.filter(p=>p.status==='over').length,'Over '+target+'h')}
+    ${kpi('check-circle','g',t.filter(p=>p.status==='ontrack').length,'On track')}
+    ${kpi('battery-charging','a',t.filter(p=>p.status==='under').length,'Has bandwidth')}
+    ${kpi('clock','i',t.filter(p=>p.status==='no-data').length,'No time data')}</div>`));
+
+  // Who has bandwidth — least creative load first (ascending tasks, then hours), excluding overloaded.
+  // Pure ordering from live data; no hardcoded thresholds.
+  const avail=t.filter(p=>p.status!=='over')
+    .sort((a,b)=>((a.task_count||0)-(b.task_count||0))||((a.hours_week==null?1e9:a.hours_week)-(b.hours_week==null?1e9:b.hours_week)))
+    .slice(0,6);
+  v.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="battery-charging"></i><h3>Who has bandwidth for new work</h3></div>
+    ${avail.length?avail.map(p=>`<div class="bw-row"><span class="bw-name">${p.name}</span>
+      <span><span class="chip">${p.task_count??0} tasks</span> <span class="stat-pill" style="background:${sl(p).c}1f;color:${sl(p).c}">${sl(p).l}</span></span></div>`).join('')
+      :'<p class="ph-sub">Everyone is at or over capacity right now.</p>'}</div>`));
+
+  // Hours vs target chart
+  v.appendChild(el(`<div class="panel" style="margin-top:16px"><div class="panel-h"><i data-lucide="clock"></i><h3>Hours this week vs ${target}h</h3></div><div class="chart" id="cHours" style="height:${Math.max(220,t.length*34)}px"></div></div>`));
+  mkChart($('#cHours'),{tooltip:{trigger:'axis'},grid:{left:110,right:30,top:10,bottom:24},
+    xAxis:{type:'value',max:Math.max(target,...t.map(p=>p.hours_week||0))+4,splitLine:{lineStyle:{color:'#eef1f7'}}},
+    yAxis:{type:'category',data:t.map(p=>p.name)},
+    series:[{type:'bar',data:t.map(p=>({value:p.hours_week||0,itemStyle:{color:sl(p).c,borderRadius:[0,5,5,0]}})),
+      markLine:{silent:true,symbol:'none',lineStyle:{color:'#dc2626',type:'dashed'},data:[{xAxis:target}],label:{formatter:target+'h'}}}]});
+
+  // capacity ring (SVG donut) — hours_week / target
+  const ring=(pct,color)=>{const r=25,c=2*Math.PI*r,off=c*(1-Math.min(1,(pct||0)/100));
+    return `<svg width="62" height="62" viewBox="0 0 62 62" class="cring">
+      <circle cx="31" cy="31" r="${r}" fill="none" stroke="var(--line2)" stroke-width="7"/>
+      <circle cx="31" cy="31" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
+        stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 31 31)"/>
+      <text x="31" y="35" text-anchor="middle" class="cringt">${pct==null?'—':pct+'%'}</text></svg>`;};
+
+  // Per-person advanced cards
   const grid=el('<div class="grid" style="margin-top:16px"></div>');
-  t.forEach(p=>{const cls=p.status||'',wk=p.hours_week==null?null:p.hours_week,fill=p.status==='over'?'red':p.status==='under'?'amber':'';
-    grid.appendChild(el(`<div class="pcard ${cls}"><div class="top"><span class="nm">${p.name}</span><span class="tag">${p.is_editor?'editor':'team'}</span></div>
-      <div class="rowline"><span>Active tasks</span><b>${p.task_count??0}</b></div>
-      ${wk==null?`<div class="rowline"><span>Hours</span><b class="muted">no time data</b></div>`:`<div class="rowline"><span>This week</span><b>${wk} / 48h</b></div><div class="bar"><i class="${fill}" style="width:${Math.min(100,Math.round(wk/48*100))}%"></i></div>`}
-      ${p.is_editor?`<div class="rowline"><span>Videos passed</span><b>${p.completed_videos??0}</b></div>`:''}</div>`));});
+  t.forEach(p=>{
+    const s=sl(p),wk=p.hours_week,pct=wk==null?null:Math.round(wk/target*100);
+    const chips=Object.entries(p.statuses||{}).sort((a,b)=>b[1]-a[1])
+      .map(([k,n])=>`<span class="chip">${n} ${k}</span>`).join('')||'<span class="ph-sub">No active tasks</span>';
+    grid.appendChild(el(`<div class="pcard ${p.status||'no-data'}">
+      <div class="tcard-h">${ring(pct,s.c)}
+        <div><div class="tbig">${p.task_count??0}</div><div class="tbiglab">active tasks</div></div></div>
+      <div class="tname">${p.name}<span class="tag">${p.is_editor?'editor':'team'}</span></div>
+      <div class="rowline"><span>Capacity</span><b style="color:${s.c}">${s.l}</b></div>
+      <div class="rowline"><span>Hours</span><b>${wk==null?'<span class="muted">no time data</span>':((p.hours_today==null?'·':p.hours_today)+'h today · '+wk+'/'+target+'h wk')}</b></div>
+      ${p.is_editor?`<div class="rowline"><span>Videos passed</span><b>${p.completed_videos??0}</b></div>`:''}
+      <div class="stchips">${chips}</div></div>`));});
   v.appendChild(grid);icons();
 }
 
