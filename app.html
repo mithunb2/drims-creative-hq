@@ -144,7 +144,99 @@ table.tbl tbody tr:hover{background:var(--bg)}
 .bar>i{display:block;height:100%;border-radius:5px;background:var(--green)}.bar>i.amber{background:var(--amber)}.bar>i.red{background:var(--red)}
 .rowline{display:flex;justify-content:space-between;font-size:12.5px;color:var(--mut);margin-top:10px}.rowline b{color:var(--ink)}
 
+/* ---------- Overview command center ---------- */
+.flowstrip{display:flex;align-items:stretch;gap:0;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow);padding:6px;margin-bottom:16px;overflow-x:auto}
+.fstage{flex:1 1 0;min-width:120px;display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:10px;position:relative;transition:.14s;cursor:default}
+.fstage+.fstage{margin-left:14px}
+.fstage::before{content:"";position:absolute;left:-13px;top:50%;width:12px;height:12px;transform:translateY(-50%);
+  border-right:2px solid var(--line);border-bottom:2px solid var(--line);rotate:-45deg;opacity:.55}
+.fstage:first-child::before{display:none}
+.fstage .fic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto}
+.fstage .fic [data-lucide]{width:17px;height:17px}
+.fstage .fn{font-size:22px;font-weight:800;line-height:1;letter-spacing:-.02em}
+.fstage .fl{font-size:11px;color:var(--mut);font-weight:600;margin-top:3px;white-space:nowrap}
+.fstage.handoff{background:linear-gradient(180deg,#faf5ff,#fff);box-shadow:inset 0 0 0 1.5px #e9d5ff}
+.handoff-tag{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:var(--violet);color:#fff;
+  font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 8px;border-radius:6px;white-space:nowrap}
+
+.cc{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.ccbox{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+.cchead{display:flex;align-items:center;gap:10px;padding:15px 17px;border-bottom:1px solid var(--line)}
+.cchead .ci{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto}
+.cchead.pipe .ci{background:#eff6ff;color:var(--blue)}.cchead.prod .ci{background:#f0fdfa;color:var(--teal)}
+.cchead .ct{font-weight:700;font-size:14.5px;letter-spacing:-.01em}
+.cchead .cs{font-size:12px;color:var(--mut);margin-top:1px}
+.cchead .cnum{margin-left:auto;font-size:24px;font-weight:800;letter-spacing:-.02em}
+.ccbody{padding:7px;overflow-y:auto}
+.storrow{border-radius:11px;padding:11px 12px;cursor:pointer;transition:.12s;border:1px solid transparent}
+.storrow:hover{background:var(--bg);border-color:var(--line2)}
+.storrow .sr-top{display:flex;align-items:center;gap:9px}
+.storrow .sr-nm{font-weight:700;font-size:13.5px;letter-spacing:-.01em;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.storrow .sr-ct{font-size:12px;font-weight:700;color:var(--ink);background:#f1f5f9;border-radius:7px;padding:2px 9px}
+.storrow .chev{color:var(--mut2);transition:.18s;flex:0 0 auto}.storrow.open .chev{transform:rotate(90deg)}
+.flowbar{display:flex;height:7px;border-radius:5px;overflow:hidden;margin-top:9px;background:var(--line2);gap:1.5px}
+.flowbar i{display:block;height:100%}
+.sr-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;align-items:center}
+.tchip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:7px;background:#f1f5f9;color:#475569}
+.tchip [data-lucide]{width:12px;height:12px}
+.tchip.who{background:#eef2ff;color:var(--indigo)}
+.tchip.due{background:#ecfeff;color:#0e7490}
+.tchip.soon{background:#fffbeb;color:#b45309}
+.tchip.over{background:#fef2f2;color:#b91c1c}
+.tchip.test{background:#f5f3ff;color:var(--violet)}
+.sr-tasks{margin-top:9px;border-top:1px dashed var(--line);padding-top:7px;display:none}
+.storrow.open .sr-tasks{display:block}
+.trow{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;transition:.1s}
+.trow:hover{background:#fff;box-shadow:var(--shadow)}
+.trow .tnm{font-size:12.5px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .tst{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap}
+.cc-empty{padding:26px 18px;text-align:center;color:var(--mut);font-size:13px}
+
+/* upcoming handoffs timeline */
+.htl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.htcol{background:var(--bg);border:1px solid var(--line2);border-radius:11px;padding:12px 13px;min-height:84px}
+.htcol .hh{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.htcol .hh .hn{font-size:12px;font-weight:700;color:var(--ink2)}
+.htcol .hh .hc{font-size:18px;font-weight:800;letter-spacing:-.02em}
+.htcol.over{border-color:#fecaca}.htcol.over .hc{color:var(--red)}
+.htcol.today{border-color:#fde68a}.htcol.today .hc{color:var(--amber)}
+.htcol.week .hc{color:var(--blue)}.htcol.later .hc{color:var(--mut)}
+.htitem{font-size:11.5px;padding:5px 7px;border-radius:7px;background:#fff;border:1px solid var(--line2);margin-top:5px;cursor:pointer;
+  display:flex;align-items:center;gap:6px;transition:.1s}
+.htitem:hover{box-shadow:var(--shadow)}
+.htitem .d{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+.htitem .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.htmore{font-size:11px;color:var(--mut);margin-top:6px;font-weight:600}
+
+/* detail drawer */
+#drawerWrap{position:fixed;inset:0;z-index:60;display:none}
+#drawerWrap.show{display:block}
+#drawerWrap .ov{position:absolute;inset:0;background:rgba(2,6,23,.42);backdrop-filter:blur(2px);animation:fade .18s ease}
+.drawer{position:absolute;top:0;right:0;height:100%;width:min(440px,100%);background:var(--card);box-shadow:-20px 0 60px rgba(2,6,23,.25);
+  display:flex;flex-direction:column;animation:slidein .22s cubic-bezier(.16,1,.3,1)}
+@keyframes slidein{from{transform:translateX(30px);opacity:.4}to{transform:translateX(0);opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.drawer .dh{display:flex;align-items:flex-start;gap:12px;padding:20px 20px 16px;border-bottom:1px solid var(--line)}
+.drawer .dh .dt{flex:1}
+.drawer .dh .dt .dnm{font-size:17px;font-weight:800;letter-spacing:-.02em;line-height:1.25}
+.drawer .dh .dt .dsub{font-size:12.5px;color:var(--mut);margin-top:4px;display:flex;align-items:center;gap:6px}
+.drawer .db{padding:18px 20px;overflow-y:auto;flex:1}
+.drawer .stagepill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:8px;margin-bottom:16px}
+.drow{display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid var(--line2)}
+.drow:last-child{border-bottom:0}
+.drow .dk{width:108px;flex:0 0 auto;font-size:12px;color:var(--mut);font-weight:600;display:flex;align-items:center;gap:7px}
+.drow .dk [data-lucide]{width:14px;height:14px}
+.drow .dv{font-size:13.5px;font-weight:600;flex:1}
+.drow .dv.muted{font-weight:500;color:var(--mut2)}
+.drawer .dlink{margin:18px 0 4px}
+.dwin{background:#f5f3ff;border:1px solid #e9d5ff;border-radius:11px;padding:12px 13px;margin-top:14px}
+.dwin .wk{font-size:11px;font-weight:700;color:var(--violet);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.dwin .wv{font-size:13px;font-weight:600;word-break:break-all}
+
 @media(max-width:820px){
+  .cc{grid-template-columns:1fr}
+  .flowstrip{padding:6px 8px}.fstage{min-width:128px}
   .charts{grid-template-columns:1fr}
   main{padding:16px 14px}
   .topbar{padding:10px 14px}.topbar .who .em{display:none}
@@ -190,6 +282,8 @@ table.tbl tbody tr:hover{background:var(--bg)}
     <div id="view"></div>
   </main>
 </section>
+
+<div id="drawerWrap"><div class="ov"></div><aside class="drawer" id="drawer"></aside></div>
 
 <script>
 const CFG = window.DRIMS_CONFIG || {};
@@ -270,35 +364,168 @@ function routeTo(tab){
   icons();
 }
 
-/* OVERVIEW */
+/* OVERVIEW — command center */
+// single source of truth for stage display (label / colour / icon)
+const STAGE_META={
+  progress:{l:'In progress',c:'#2563eb',ic:'pen-line'},
+  script_ready:{l:'Scripts ready',c:'#0ea5e9',ic:'file-text'},
+  rework:{l:'Rework',c:'#d97706',ic:'rotate-ccw'},
+  blocked:{l:'Blocked',c:'#dc2626',ic:'unlink'},
+  video_ready:{l:'Ready to test',c:'#0d9488',ic:'clapperboard'},
+  testing:{l:'In testing',c:'#7c3aed',ic:'flask-conical'},
+  winner:{l:'Winner',c:'#16a34a',ic:'award'},
+  loser:{l:'Loser',c:'#dc2626',ic:'x-circle'},
+  done:{l:'Done',c:'#16a34a',ic:'check'},other:{l:'Other',c:'#94a3b8',ic:'circle'}};
+const PIPE_ORDER=['progress','script_ready','rework','blocked'];
+const PROD_ORDER=['video_ready','testing'];
+const DAY=864e5;
+// timing is DERIVED from due_date (ClickUp time-in-status is plan-gated 403), so these
+// are all null-safe and the UI degrades gracefully until the timing columns are synced.
+const hasTiming=()=>DATA.ads.some(a=>a.due_date);
+const hasAssignee=()=>DATA.ads.some(a=>a.assignee);
+function dueOf(a){if(!a||!a.due_date)return null;const t=new Date(a.due_date).getTime();if(isNaN(t))return null;
+  return {t,days:Math.floor((t-Date.now())/DAY),over:t<Date.now()};}
+function relDue(d){if(!d)return '';if(d.over){const n=Math.abs(d.days);return n===0?'overdue today':n+'d overdue';}
+  return d.days===0?'due today':d.days===1?'due tomorrow':'in '+d.days+'d';}
+function fmtDate(s){if(!s)return null;const t=new Date(s);if(isNaN(t))return null;
+  return t.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});}
+function editorsOf(ads){return uniq(ads.flatMap(a=>String(a.assignee||'').split(',').map(s=>s.trim()).filter(Boolean)));}
+function storeTiming(ads){const dues=ads.map(dueOf).filter(Boolean);
+  const over=dues.filter(d=>d.over).length,up=dues.filter(d=>!d.over).sort((a,b)=>a.t-b.t)[0];
+  return {over,next:up?up.days:null};}
+const kpi=(ic,cls,n,l)=>`<div class="kpi ${cls}"><div class="kpi-ic"><i data-lucide="${ic}"></i></div><div class="n">${n}</div><div class="l">${l}</div></div>`;
+
 function viewOverview(){
-  const ads=DATA.ads,stores=DATA.products,v=$('#view');v.innerHTML='';
-  const total=ads.length,prod=inProduction(ads),pipe=inPipeline(ads),
-        win=ads.filter(isWinner).length,kill=ads.filter(isLoser).length;
+  const v=$('#view');v.innerHTML='';
+  const ads=DATA.ads,stores=DATA.products;
+  if(!ads.length){
+    v.appendChild(el(`<div class="kpis">${kpi('activity','v',0,'Creatives in motion')}${kpi('users','b',0,'Editors working')}${kpi('clapperboard','t',0,'Ready for testing')}${kpi('flask-conical','a',0,'In testing')}</div>`));
+    v.appendChild(emptyState('inbox','No creatives yet','Once the ClickUp → Supabase sync runs, every store\'s creatives appear here.'));icons();return;}
+
+  const sc=s=>ads.filter(a=>stageOf(a)===s).length;
+  const motion=ads.filter(a=>PIPE_STAGES.has(stageOf(a))||PROD_STAGES.has(stageOf(a)));
+  const pipeTotal=inPipeline(ads),prodTotal=inProduction(ads);
+  const readyTest=sc('video_ready'),inTest=sc('testing');
+  const editors=editorsOf(motion),timing=hasTiming(),assignee=hasAssignee();
+
+  /* ── KPI strip ── */
   v.appendChild(el(`<div class="kpis">
-    ${kpi('store','i',stores.length,'Stores')}${kpi('clapperboard','v',total,'Creatives')}
-    ${kpi('flask-conical','b',pipe,'In pipeline')}${kpi('rocket','g',prod,'In production')}
-    ${kpi('trash-2','r',kill,'Killed')}${kpi('award','a',win,'Winners')}</div>`));
-  if(total===0){v.appendChild(emptyState('inbox','No creatives yet','Once the ClickUp → Supabase sync runs, every store\'s creatives appear here.'));icons();return;}
-  // FIXED chart: ranked, only stores that have creatives, descending
-  const ranked=stores.map(s=>({name:storeName(s),v:adsForStore(s.id).length})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
-  const max=Math.max(1,...ranked.map(r=>r.v));
-  v.appendChild(el(`<div class="charts">
-    <div class="panel"><div class="panel-h"><i data-lucide="bar-chart-3"></i><h3>Creatives by store</h3></div>
-      <div class="ranklist">${ranked.map((r,i)=>`<div class="rankrow"><span class="nm" title="${r.name}">${r.name}</span>
-        <span class="track"><i style="width:${Math.round(r.v/max*100)}%;background:${PAL[i%PAL.length]}"></i></span><span class="v">${r.v}</span></div>`).join('')}</div></div>
-    <div class="panel"><div class="panel-h"><i data-lucide="pie-chart"></i><h3>Production stage</h3></div><div class="chart" id="cStage" style="height:280px"></div></div>
-  </div>`));
-  mkChart($('#cStage'),{tooltip:{trigger:'item'},legend:{bottom:0,textStyle:{color:'#64748b'}},
-    series:[{type:'pie',radius:['46%','72%'],center:['50%','44%'],itemStyle:{borderColor:'#fff',borderWidth:3,borderRadius:5},
-      label:{color:'#334155'},data:[{name:'Pipeline',value:pipe,itemStyle:{color:'#2563eb'}},{name:'Production',value:prod,itemStyle:{color:'#16a34a'}},
-            {name:'Winners',value:win,itemStyle:{color:'#7c3aed'}},{name:'Killed',value:kill,itemStyle:{color:'#dc2626'}}].filter(x=>x.value)}]});
-  v.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="clock"></i>Coming as data flows · Phase 2</span>
-    <div class="panel-h"><i data-lucide="alert-triangle"></i><h3>Red zone — overdue &amp; at-risk</h3></div>
-    <p class="ph-sub">Lights up once due-dates are captured from ClickUp. Parked rather than showing false alarms.</p></div>`));
+    ${kpi('activity','v',motion.length,'Creatives in motion')}
+    ${kpi('users','b',assignee?editors.length:'—','Editors working')}
+    ${kpi('clapperboard','t',readyTest,'Ready for testing')}
+    ${kpi('flask-conical','a',inTest,'In testing')}</div>`));
+
+  /* ── pipeline flow strip (the happy-path funnel; testing handoff emphasised) ── */
+  const FLOW=[['progress','In progress'],['script_ready','Scripts ready'],['video_ready','Ready to test'],['testing','In testing'],['winner','Winners']];
+  v.appendChild(el(`<div class="flowstrip">${FLOW.map(([k,lab])=>{const m=STAGE_META[k],hand=k==='video_ready';
+    return `<div class="fstage${hand?' handoff':''}">${hand?'<span class="handoff-tag">→ media buyer</span>':''}
+      <div class="fic" style="background:${m.c}1a;color:${m.c}"><i data-lucide="${m.ic}"></i></div>
+      <div><div class="fn" style="color:${m.c}">${sc(k)}</div><div class="fl">${lab}</div></div></div>`;}).join('')}</div>`));
+
+  /* ── the two boxes ── */
+  const cc=el('<div class="cc"></div>');
+  cc.appendChild(buildBox('pipe','Creative Pipeline','In production-ready build',stores,a=>PIPE_STAGES.has(stageOf(a)),pipeTotal,PIPE_ORDER,timing,assignee,'flask-conical'));
+  cc.appendChild(buildBox('prod','Production','Ready for & in testing',stores,a=>PROD_STAGES.has(stageOf(a)),prodTotal,PROD_ORDER,timing,assignee,'rocket'));
+  v.appendChild(cc);
+
+  /* ── upcoming handoffs (timing) ── */
+  if(timing) v.appendChild(buildHandoffs(motion));
+  else v.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="clock"></i>Timing syncs once due-dates land</span>
+    <div class="panel-h"><i data-lucide="calendar-clock"></i><h3>Upcoming handoffs &amp; timing</h3></div>
+    <p class="ph-sub">Due-dates, start dates and assignees aren't in the cloud yet. Run <b>creative_hq_timing_addcols.sql</b> and the next sync fills in “how soon to production / testing” and who's working — no fake fields until then.</p></div>`));
   icons();
 }
-const kpi=(ic,cls,n,l)=>`<div class="kpi ${cls}"><div class="kpi-ic"><i data-lucide="${ic}"></i></div><div class="n">${n}</div><div class="l">${l}</div></div>`;
+
+// One command-center box: stores filtered to this lane, each an expandable row.
+function buildBox(kind,title,sub,stores,inLane,total,order,timing,assignee,emptyIc){
+  const box=el(`<div class="ccbox"><div class="cchead ${kind}"><div class="ci"><i data-lucide="${kind==='pipe'?'flask-conical':'rocket'}"></i></div>
+    <div><div class="ct">${title}</div><div class="cs">${sub}</div></div><div class="cnum">${total}</div></div>
+    <div class="ccbody"></div></div>`);
+  const body=box.querySelector('.ccbody');
+  const rows=stores.map(s=>({s,ads:adsForStore(s.id).filter(inLane)})).filter(x=>x.ads.length).sort((a,b)=>b.ads.length-a.ads.length);
+  if(!rows.length){body.appendChild(el(`<div class="cc-empty">Nothing ${kind==='pipe'?'in the pipeline':'in production'} right now.</div>`));return box;}
+  rows.forEach(({s,ads})=>{
+    const counts=order.map(k=>({k,n:ads.filter(a=>stageOf(a)===k).length})).filter(x=>x.n>0);
+    const tot=ads.length;
+    const seg=counts.map(c=>`<i title="${STAGE_META[c.k].l}: ${c.n}" style="width:${Math.round(c.n/tot*100)}%;background:${STAGE_META[c.k].c}"></i>`).join('');
+    const tm=storeTiming(ads),eds=editorsOf(ads);
+    const meta=[];
+    if(kind==='prod') counts.forEach(c=>meta.push(`<span class="tchip ${c.k==='testing'?'test':''}"><i data-lucide="${STAGE_META[c.k].ic}"></i>${c.n} ${STAGE_META[c.k].l.toLowerCase()}</span>`));
+    if(assignee&&eds.length) meta.push(`<span class="tchip who"><i data-lucide="${kind==='prod'?'user-check':'users'}"></i>${eds.length===1?eds[0]:eds.length+(kind==='prod'?' buyers':' editors')}</span>`);
+    if(timing){ if(tm.over) meta.push(`<span class="tchip over"><i data-lucide="alert-triangle"></i>${tm.over} overdue</span>`);
+      else if(tm.next!=null) meta.push(`<span class="tchip ${tm.next<=2?'soon':'due'}"><i data-lucide="calendar"></i>next ${tm.next===0?'today':'in '+tm.next+'d'}</span>`); }
+    const tasks=ads.slice().sort((a,b)=>{const da=dueOf(a),db=dueOf(b);return (da?da.t:9e15)-(db?db.t:9e15);})
+      .map(a=>{const m=STAGE_META[stageOf(a)]||STAGE_META.other,d=dueOf(a);
+        return `<div class="trow" data-id="${a.id}"><i data-lucide="${m.ic}" style="color:${m.c};width:14px;height:14px"></i>
+          <span class="tnm">${a.format_name||'Untitled'}</span>
+          ${d?`<span class="tchip ${d.over?'over':d.days<=2?'soon':'due'}" style="padding:1px 7px">${relDue(d)}</span>`:''}
+          <span class="tst" style="background:${m.c}1a;color:${m.c}">${a.status||m.l}</span></div>`;}).join('');
+    body.appendChild(el(`<div class="storrow"><div class="sr-top"><i data-lucide="chevron-right" class="chev"></i>
+      <span class="sr-nm" title="${storeName(s)}">${storeName(s)}</span><span class="sr-ct">${tot}</span></div>
+      <div class="flowbar">${seg}</div>
+      <div class="sr-meta">${meta.join('')||'<span class="tchip"><i data-lucide="minus"></i>no timing yet</span>'}</div>
+      <div class="sr-tasks">${tasks}</div></div>`));
+  });
+  // delegation: task → drawer; row → expand
+  box.addEventListener('click',e=>{
+    const tr=e.target.closest('.trow'); if(tr){e.stopPropagation();openDrawer(tr.dataset.id);return;}
+    const sr=e.target.closest('.storrow'); if(sr){sr.classList.toggle('open');icons();}});
+  return box;
+}
+
+// Upcoming handoffs — buckets every in-motion, due-dated creative by how soon it's due.
+function buildHandoffs(motion){
+  const buckets={over:[],today:[],week:[],later:[]};
+  motion.forEach(a=>{const d=dueOf(a);if(!d)return;
+    if(d.over)buckets.over.push(a);else if(d.days===0)buckets.today.push(a);else if(d.days<=7)buckets.week.push(a);else buckets.later.push(a);});
+  const COLS=[['over','Overdue','over'],['today','Due today','today'],['week','This week','week'],['later','Later','later']];
+  const card=(a)=>{const m=STAGE_META[stageOf(a)]||STAGE_META.other,st=(DATA.products.find(p=>p.id===a.product_id)||{});
+    return `<div class="htitem" data-id="${a.id}"><span class="d" style="background:${m.c}"></span>
+      <span class="nm">${a.format_name||'Untitled'}</span><span class="ph-sub" style="font-size:10.5px">${storeName(st)}</span></div>`;};
+  const panel=el(`<div class="panel"><div class="panel-h"><i data-lucide="calendar-clock"></i><h3>Upcoming handoffs &amp; timing</h3>
+    <span class="grow"></span><span class="ph-sub">soonest first · click any creative for detail</span></div>
+    <div class="htl">${COLS.map(([k,lab,cls])=>{const arr=buckets[k].slice().sort((a,b)=>dueOf(a).t-dueOf(b).t);
+      return `<div class="htcol ${cls}"><div class="hh"><span class="hn">${lab}</span><span class="hc">${arr.length}</span></div>
+        ${arr.slice(0,4).map(card).join('')||'<span class="ph-sub" style="font-size:11.5px">—</span>'}
+        ${arr.length>4?`<div class="htmore">+${arr.length-4} more</div>`:''}</div>`;}).join('')}</div></div>`);
+  panel.addEventListener('click',e=>{const it=e.target.closest('.htitem');if(it)openDrawer(it.dataset.id);});
+  return panel;
+}
+
+// Detail drawer — full creative detail: status, assignee, dates, source winner, link.
+function openDrawer(id){
+  const a=DATA.ads.find(x=>x.id===id);if(!a)return;
+  const m=STAGE_META[stageOf(a)]||STAGE_META.other,store=DATA.products.find(p=>p.id===a.product_id)||{};
+  const d=dueOf(a),lane=(a.ad_origin||'').replace(/_/g,' ');
+  const row=(ic,k,val,extra='')=>val?`<div class="drow"><span class="dk"><i data-lucide="${ic}"></i>${k}</span><span class="dv">${val}${extra}</span></div>`
+    :`<div class="drow"><span class="dk"><i data-lucide="${ic}"></i>${k}</span><span class="dv muted">—</span></div>`;
+  const dueTxt=d?`${fmtDate(a.due_date)} <span class="tchip ${d.over?'over':d.days<=2?'soon':'due'}" style="margin-left:6px">${relDue(d)}</span>`:'';
+  $('#drawer').innerHTML=`
+    <div class="dh"><div class="dt"><div class="dnm">${a.format_name||'Untitled'}</div>
+      <div class="dsub"><i data-lucide="store" style="width:14px;height:14px"></i>${storeName(store)} · ${lane}</div></div>
+      <button class="iconbtn" onclick="closeDrawer()"><i data-lucide="x"></i></button></div>
+    <div class="db">
+      <span class="stagepill" style="background:${m.c}1a;color:${m.c}"><i data-lucide="${m.ic}"></i>${m.l} · ${a.status||''}</span>
+      ${row('user-check','Assignee',a.assignee)}
+      ${row('calendar','Due date',dueTxt)}
+      ${row('play','Start date',fmtDate(a.start_date))}
+      ${row('clock','Created',fmtDate(a.cu_created_at))}
+      ${a.date_done?row('check-circle','Completed',fmtDate(a.date_done)):''}
+      ${row('target','Angle',a.angle)}
+      ${row('user','Persona',a.persona)}
+      ${a.funnel_stage?row('filter','Funnel',`<span class="chip ${(a.funnel_stage||'').toLowerCase()}">${a.funnel_stage}</span>`):''}
+      ${a.hook_type?row('zap','Hook type',a.hook_type):''}
+      ${a.tone?row('palette','Tone',a.tone):''}
+      ${a.format?row('layout-template','Format',a.format):''}
+      ${a.priority?row('flag','Priority',a.priority):''}
+      ${a.source_inspiration?`<div class="dwin"><div class="wk"><i data-lucide="award"></i>Source winner</div><div class="wv">${a.source_inspiration}</div></div>`:''}
+      ${a.ad_link?`<div class="dlink"><a class="btn" style="text-decoration:none" href="${a.ad_link}" target="_blank"><i data-lucide="external-link"></i>Open in ClickUp</a></div>`:''}
+    </div>`;
+  $('#drawerWrap').classList.add('show');icons();
+}
+function closeDrawer(){$('#drawerWrap').classList.remove('show');}
+$('#drawerWrap').addEventListener('click',e=>{if(e.target.classList.contains('ov'))closeDrawer();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
 
 /* STORES */
 function viewStores(){
