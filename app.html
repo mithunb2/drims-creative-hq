@@ -482,6 +482,9 @@ async function _inspoManager(body, slug){
           ${(s.body_copy||s.script||s.script_30s)?`<p class="ph-sub" style="white-space:pre-wrap;margin-top:8px">${String(s.body_copy||s.script||s.script_30s)}</p>`:''}
           ${s.visual_direction?`<div class="rowline"><span>Visual</span><span class="ph-sub" style="max-width:72%">${s.visual_direction}</span></div>`:''}
           <div class="tags">${s.hook_mechanism?`<span class="chip">${s.hook_mechanism}</span>`:''}${s.persona?`<span class="chip">${s.persona}</span>`:''}${s.how_it_differs?`<span class="chip">distinct</span>`:''}</div>
+          <div style="display:flex;gap:8px;margin-top:11px">
+            <button class="btn inPub" data-id="${g.id}" style="width:auto;padding:7px 14px"><i data-lucide="send"></i>Publish</button>
+            <button class="iconbtn inDisc" data-id="${g.id}" title="Discard"><i data-lucide="trash-2"></i></button></div>
         </div>`));});
     });
     body.appendChild(panel);
@@ -528,6 +531,17 @@ async function _inspoManager(body, slug){
     if(kind==='winning_image')ins.storage_path=ref;   // image: ref is the storage path; video: url is the ref
     await sb.from('inspiration_queue').insert([ins]);
     _inspoManager(body,slug);   // shows it under "Processing"; scripts appear when the worker finishes
+  }));
+  // Publish → enqueue (worker creates the ClickUp task, tagged); Discard → direct status flip.
+  body.querySelectorAll('.inPub').forEach(b=>b.addEventListener('click',async()=>{
+    b.disabled=true;
+    await sb.from('inspiration_queue').insert([{ins_id:crypto.randomUUID(),product_id:slug,kind:'publish',url:b.dataset.id,action:'publish',status:'pending',requested_by:($('#userEmail').textContent||'')}]);
+    _inspoManager(body,slug);
+  }));
+  body.querySelectorAll('.inDisc').forEach(b=>b.addEventListener('click',async()=>{
+    b.disabled=true;
+    await sb.from('generated_scripts').update({status:'discarded'}).eq('id',b.dataset.id);
+    _inspoManager(body,slug);
   }));
 }
 
