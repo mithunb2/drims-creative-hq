@@ -392,13 +392,6 @@ function renderDeepDive(){
   const list=(ic,title,arr,cls)=>`<div class="panel"><div class="panel-h"><i data-lucide="${ic}"></i><h3>${title} (${arr.length})</h3></div>${arr.length?
     `<div class="scrollx"><table class="tbl"><tbody>${arr.map(a=>`<tr><td><b>${a.format_name||'—'}</b></td><td>${a.angle||''}</td><td><span class="chip ${cls}">${a.status||''}</span></td>${a.ad_link?`<td><a href="${a.ad_link}" target="_blank">open</a></td>`:'<td></td>'}</tr>`).join('')}</tbody></table></div>`:'<p class="ph-sub">None yet.</p>'}</div>`;
   body.appendChild(el(`<div class="charts">${list('award','Winners',wins,'win')}${list('x-circle','Losers',losers,'lose')}</div>`));
-  // In-context inspiration/winner manager — same shared write-loop component as the
-  // Inspirations tab, bound to THIS store (selectedStore). Add winners/inspirations
-  // right where you're looking at the creatives.
-  body.appendChild(el(`<div class="panel" style="margin-top:4px"><div class="panel-h"><i data-lucide="lightbulb"></i><h3>Winners &amp; inspirations for this store</h3></div>
-    <p class="ph-sub" style="margin-bottom:10px">Add winning/inspiration URLs here — writes to the Brand Brain and feeds the 60% winner-weighting on the next build.</p></div>`));
-  const _inspoBox=el('<div></div>');body.appendChild(_inspoBox);
-  _inspoManager(_inspoBox, selectedStore);
   icons();
 }
 
