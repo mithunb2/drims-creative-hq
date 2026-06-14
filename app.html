@@ -442,9 +442,16 @@ async function _inspoManager(body, slug){
   body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="plus-circle"></i><h3>Add a winner or inspiration</h3></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div class="field" style="margin:0"><label>Type</label><select class="sel inKind">${INSPO_KINDS.map(k=>`<option value="${k[0]}">${k[1]}</option>`).join('')}</select></div>
-      <div class="field" style="margin:0;flex:1;min-width:240px"><label>URL</label><input class="inUrl" placeholder="https://…"></div>
+      <div class="field inUrlWrap" style="margin:0;flex:1;min-width:240px"><label>Video URL</label><input class="inUrl" placeholder="https://…"></div>
+      <div class="field inFileWrap hide" style="margin:0;flex:1;min-width:240px"><label>Image file</label><input type="file" class="inFile" accept="image/*"></div>
       <button class="btn inAdd" style="width:auto"><i data-lucide="plus"></i>Add</button>
     </div><div class="err hide inErr"></div></div>`));
+  // Images upload a file (→ Supabase Storage); videos paste a URL. Toggle by Type.
+  const _ksel=body.querySelector('.inKind');
+  const _toggleIn=()=>{const img=_ksel.value==='winning_image';
+    body.querySelector('.inFileWrap').classList.toggle('hide',!img);
+    body.querySelector('.inUrlWrap').classList.toggle('hide',img);};
+  _ksel.addEventListener('change',_toggleIn); _toggleIn();
   const pend=q.filter(r=>r.status==='pending'||r.status==='failed');
   if(pend.length)body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="loader"></i><h3>Processing</h3></div>
     ${pend.map(r=>`<div class="rowline"><span>${r.action||'add'} · ${_kindLabel(r.kind)} · ${(r.url||'').slice(0,60)}</span>
@@ -458,13 +465,31 @@ async function _inspoManager(body, slug){
   });
   icons();
   body.querySelector('.inAdd').addEventListener('click',async()=>{
-    const kind=body.querySelector('.inKind').value,url=body.querySelector('.inUrl').value.trim(),errB=body.querySelector('.inErr');
-    if(!/^https?:\/\//i.test(url)){errB.textContent='Enter a valid URL (https://…)';errB.classList.remove('hide');return;}
-    const btn=body.querySelector('.inAdd');btn.disabled=true;
-    const {error}=await sb.from('inspiration_queue').insert([{ins_id:crypto.randomUUID(),product_id:slug,kind,url,action:'add',status:'pending',requested_by:($('#userEmail').textContent||'')}]);
-    btn.disabled=false;
-    if(error){errB.textContent=error.message;errB.classList.remove('hide');return;}
-    _inspoManager(body,slug);
+    const kind=body.querySelector('.inKind').value,errB=body.querySelector('.inErr'),btn=body.querySelector('.inAdd');
+    errB.classList.add('hide');
+    if(kind==='winning_image'){
+      const f=body.querySelector('.inFile').files[0];
+      if(!f){errB.textContent='Choose an image file to upload.';errB.classList.remove('hide');return;}
+      if(!/^image\//.test(f.type||'')){errB.textContent='That file isn\'t an image.';errB.classList.remove('hide');return;}
+      if(f.size>15*1024*1024){errB.textContent='Image too large (max 15 MB).';errB.classList.remove('hide');return;}
+      btn.disabled=true;
+      const ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]+/g,'')||'jpg';
+      const path=`${slug}/${crypto.randomUUID()}.${ext}`;
+      const up=await sb.storage.from(CFG.INSPIRATION_BUCKET).upload(path,f,{contentType:f.type,upsert:false});
+      if(up.error){btn.disabled=false;errB.textContent='Upload failed: '+up.error.message;errB.classList.remove('hide');return;}
+      const {error}=await sb.from('inspiration_queue').insert([{ins_id:crypto.randomUUID(),product_id:slug,kind,url:null,storage_path:path,action:'add',status:'pending',requested_by:($('#userEmail').textContent||'')}]);
+      btn.disabled=false;
+      if(error){errB.textContent=error.message;errB.classList.remove('hide');return;}
+      body.querySelector('.inFile').value='';_inspoManager(body,slug);
+    }else{
+      const url=body.querySelector('.inUrl').value.trim();
+      if(!/^https?:\/\//i.test(url)){errB.textContent='Enter a valid URL (https://…)';errB.classList.remove('hide');return;}
+      btn.disabled=true;
+      const {error}=await sb.from('inspiration_queue').insert([{ins_id:crypto.randomUUID(),product_id:slug,kind,url,action:'add',status:'pending',requested_by:($('#userEmail').textContent||'')}]);
+      btn.disabled=false;
+      if(error){errB.textContent=error.message;errB.classList.remove('hide');return;}
+      body.querySelector('.inUrl').value='';_inspoManager(body,slug);
+    }
   });
   body.querySelectorAll('.inRm').forEach(b=>b.addEventListener('click',async()=>{
     b.disabled=true;

@@ -30,6 +30,11 @@ window.DRIMS_CONFIG = {
     '100048167', // Sourabh (media buyer)
   ],
 
+  // --- Inspiration image uploads (Supabase Storage, private bucket) ---
+  // Winning/inspiration IMAGE files upload here (logged-in only, RLS-gated).
+  // Change the bucket name here if you rename it in Supabase — no code change.
+  INSPIRATION_BUCKET: 'inspiration-uploads',
+
   // --- App branding ---
   APP_NAME: 'DRIMS Creative HQ',
   // localStorage keys are namespaced by this so multiple DRIMS tools on the
