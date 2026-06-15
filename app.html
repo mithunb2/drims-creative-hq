@@ -577,10 +577,81 @@ function closeDrawer(){$('#drawerWrap').classList.remove('show');}
 $('#drawerWrap').addEventListener('click',e=>{if(e.target.classList.contains('ov'))closeDrawer();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
 
+/* ---- TASK 2: employee detail (click a teammate) — all derived from live data ---- */
+const DAYMS=864e5;
+// a person's tasks = ads whose comma-joined assignee field contains their name (exact token)
+function tasksForPerson(name){const n=(name||'').trim().toLowerCase();if(!n)return [];
+  return DATA.ads.filter(a=>String(a.assignee||'').split(',').map(s=>s.trim().toLowerCase()).includes(n));}
+// pending age (days) for a not-done task, from the REAL ClickUp creation time
+function pendingAge(a){if(!a||!a.cu_created_at)return null;if(stageOf(a)==='winner'||stageOf(a)==='loser'||a.date_done)return null;
+  const t=new Date(a.cu_created_at).getTime();if(isNaN(t))return null;return Math.max(0,Math.floor((Date.now()-t)/DAYMS));}
+function openEmployeeDrawer(name){
+  const p=(DATA.team||[]).find(x=>(x.name||'').toLowerCase()===(name||'').toLowerCase());
+  const tasks=tasksForPerson(name);
+  const store=id=>{const s=DATA.products.find(x=>x.id===id);return s?storeName(s):id;};
+  const target=(p&&p.weekly_target)||48;
+  const STc={over:'#dc2626',under:'#d97706',ontrack:'#16a34a','no-data':'#94a3b8'};
+  const capc=STc[(p&&p.status)||'no-data'];
+  const wk=p&&p.hours_week, pct=wk==null?null:Math.round(wk/target*100);
+  // task rows sorted by soonest due, then oldest-pending first
+  const rows=tasks.slice().sort((a,b)=>{const da=dueOf(a),db=dueOf(b);return (da?da.t:9e15)-(db?db.t:9e15);})
+    .map(a=>{const m=STAGE_META[stageOf(a)]||STAGE_META.other,d=dueOf(a),age=pendingAge(a);
+      return `<div class="trow" data-id="${a.id}"><i data-lucide="${m.ic}" style="color:${m.c};width:14px;height:14px"></i>
+        <span class="tnm">${a.format_name||'Untitled'}<span class="ph-sub" style="font-size:10.5px;margin-left:6px">${store(a.product_id)}</span></span>
+        ${age!=null?`<span class="tchip" title="days pending">${age}d pending</span>`:''}
+        ${d?`<span class="tchip ${d.over?'over':d.days<=2?'soon':'due'}" style="padding:1px 7px">${relDue(d)}</span>`:''}
+        <span class="tst" style="background:${m.c}1a;color:${m.c}">${a.status||m.l}</span></div>`;}).join('');
+  const statuses=(p&&p.statuses)||{};
+  const chips=Object.entries(statuses).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<span class="chip">${n} ${k}</span>`).join('');
+  const ages=tasks.map(pendingAge).filter(x=>x!=null);
+  const oldest=ages.length?Math.max(...ages):null;
+  const row=(ic,k,val)=>`<div class="drow"><span class="dk"><i data-lucide="${ic}"></i>${k}</span><span class="dv">${val||'<span class=muted>—</span>'}</span></div>`;
+  $('#drawer').innerHTML=`
+    <div class="dh"><div class="dt"><div class="dnm">${name}</div>
+      <div class="dsub"><i data-lucide="${p&&p.is_editor?'clapperboard':'user'}" style="width:14px;height:14px"></i>${p?(p.is_editor?'Editor':'Team'):'Not in capacity roster'}</div></div>
+      <button class="iconbtn" onclick="closeDrawer()"><i data-lucide="x"></i></button></div>
+    <div class="db">
+      <span class="stagepill" style="background:${capc}1a;color:${capc}"><i data-lucide="battery-charging"></i>${p?({over:'Over '+target+'h',under:'Has bandwidth',ontrack:'On track','no-data':'No time data'}[p.status]||'No time data'):'No capacity data'}</span>
+      ${row('list-checks','Active tasks',(p&&p.task_count!=null?p.task_count:tasks.length))}
+      ${row('clock','Hours',wk==null?'':((p.hours_today==null?'·':p.hours_today)+'h today · '+wk+'/'+target+'h week'+(pct!=null?' ('+pct+'%)':'')))}
+      ${p&&p.is_editor?row('check-circle','Videos passed',p.completed_videos??0):''}
+      ${oldest!=null?row('hourglass','Oldest pending',oldest+' days'):''}
+      ${chips?`<div class="gs-sec" style="margin-top:6px"><div class="gs-seclab"><i data-lucide="layers"></i>By status</div><div class="stchips">${chips}</div></div>`:''}
+      <div class="gs-sec"><div class="gs-seclab"><i data-lucide="list-video"></i>All assigned tasks (${tasks.length}) · soonest due first</div>
+        ${rows||'<p class="ph-sub">No tasks currently assigned to this person.</p>'}</div>
+    </div>`;
+  // task rows inside open a creative's own drawer
+  $('#drawer').querySelectorAll('.trow').forEach(r=>r.addEventListener('click',()=>openDrawer(r.dataset.id)));
+  $('#drawerWrap').classList.add('show');icons();
+}
+/* TASK 1: hook text accessor — forward-compatible (shows hook once ads.hook_text is synced;
+   graceful blank until the DDL + sync land, like the timing columns). No hardcoding. */
+const hookOf=a=>(a&&a.hook_text)?String(a.hook_text):'';
+
 /* STORES */
 function viewStores(){
   const v=$('#view');v.innerHTML='';
   if(!DATA.products.length){v.appendChild(emptyState('store','No stores yet','The sync creates one card per brand the first time it runs.'));icons();return;}
+  /* TASK 3: stats header — meaningful, interactive, all derived live (no hardcoding) */
+  const ads=DATA.ads;
+  const tally=(arr,fn)=>{const m={};arr.forEach(a=>{const k=fn(a)||'(none)';m[k]=(m[k]||0)+1;});return m;};
+  const byFormat=tally(ads,a=>a.format), byStage=tally(ads,a=>(STAGE_META[stageOf(a)]||STAGE_META.other).l);
+  const activeEd=new Set(ads.flatMap(a=>String(a.assignee||'').split(',').map(s=>s.trim()).filter(Boolean))).size;
+  const done=ads.filter(a=>isWinner(a)||isLoser(a)).length, throughput=ads.length?Math.round(done/ads.length*100):0;
+  v.appendChild(el(`<div class="kpis">
+    ${kpi('store','i',DATA.products.filter(s=>adsForStore(s.id).length).length,'Active stores')}
+    ${kpi('clapperboard','v',ads.length,'Total creatives')}
+    ${kpi('users','b',activeEd,'People assigned')}
+    ${kpi('check-circle','g',throughput+'%','Resolved (win/kill)')}</div>`));
+  v.appendChild(el(`<div class="charts">
+    <div class="panel"><div class="panel-h"><i data-lucide="layout-template"></i><h3>Creative mix by format</h3></div><div class="chart" id="cFmt" style="height:260px"></div></div>
+    <div class="panel"><div class="panel-h"><i data-lucide="git-branch"></i><h3>Where everything stands (stage)</h3></div><div class="chart" id="cStg" style="height:260px"></div></div></div>`));
+  const donut=(node,obj)=>{if(!node||!Object.keys(obj).length)return;mkChart(node,{tooltip:{trigger:'item'},legend:{bottom:0,type:'scroll',textStyle:{color:'#64748b'}},
+    series:[{type:'pie',radius:['46%','72%'],center:['50%','44%'],itemStyle:{borderColor:'#fff',borderWidth:3,borderRadius:5},label:{color:'#334155'},
+      data:Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([k,val],i)=>({name:k,value:val,itemStyle:{color:PAL[i%PAL.length]}}))}]});};
+  // defer chart init until nodes are in the DOM
+  setTimeout(()=>{donut($('#cFmt'),byFormat);donut($('#cStg'),byStage);},0);
+  v.appendChild(el(`<div class="panel-h" style="margin:18px 4px 2px"><i data-lucide="store"></i><h3>By store</h3></div>`));
   const grid=el('<div class="grid"></div>');
   DATA.products.forEach((s,i)=>{
     const ads=adsForStore(s.id),ang=DATA.angles.filter(a=>a.product_id===s.id),per=DATA.personas.filter(p=>p.product_id===s.id);
@@ -663,6 +734,25 @@ function renderDeepDive(){
   }).join('');
   body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="target"></i><h3>Angles being tested</h3></div><div class="scrollx"><table class="tbl">
     <thead><tr><th>Angle</th><th>Creatives</th><th>Hook type</th><th>Funnel</th><th>Tone</th><th>Persona</th><th>Outcome</th></tr></thead><tbody>${rows}</tbody></table></div></div>`));
+  /* TASK 1: HOOKS — judge strength at a glance. Forward-compatible: shows the real hook
+     text once ads.hook_text is synced; until then a clear note (no faking). Click → detail. */
+  const withHook=ads.filter(a=>hookOf(a));
+  if(withHook.length){
+    const hrows=withHook.slice().sort((a,b)=>(a.format_name||'').localeCompare(b.format_name||''))
+      .map(a=>`<tr class="hookrow" data-id="${a.id}" style="cursor:pointer">
+        <td><b>${a.format_name||'—'}</b></td>
+        <td style="max-width:420px"><span style="font-weight:600">${hookOf(a)}</span></td>
+        <td>${a.hook_type?`<span class="chip">${a.hook_type}</span>`:'—'}</td>
+        <td>${a.format?`<span class="chip">${a.format}</span>`:'—'}</td></tr>`).join('');
+    const panel=el(`<div class="panel"><div class="panel-h"><i data-lucide="quote"></i><h3>Hooks — judge strength at a glance (${withHook.length})</h3></div>
+      <div class="scrollx"><table class="tbl"><thead><tr><th>Task</th><th>Hook line</th><th>Hook type</th><th>Format</th></tr></thead><tbody>${hrows}</tbody></table></div></div>`);
+    panel.querySelectorAll('.hookrow').forEach(r=>r.addEventListener('click',()=>openDrawer(r.dataset.id)));
+    body.appendChild(panel);
+  } else {
+    body.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="quote"></i>Hook text — activates when synced</span>
+      <div class="panel-h"><i data-lucide="quote"></i><h3>Hooks — judge strength at a glance</h3></div>
+      <p class="ph-sub">The hook line for every task appears here once hook text is synced to the cloud (one small DB migration + the next sync). Parked rather than shown blank.</p></div>`));
+  }
   const personas=uniq(ads.map(a=>a.persona));
   body.appendChild(el(`<div class="panel"><div class="panel-h"><i data-lucide="users"></i><h3>Personas tried (${personas.length})</h3></div>
     <div class="minirow">${personas.length?personas.map(p=>`<span class="tag"><i data-lucide="user"></i>${p}</span>`).join(''):'<span class="ph-sub">No persona tags yet — fills in after enrichment.</span>'}</div></div>`));
@@ -957,14 +1047,18 @@ function viewTeam(){
     const s=sl(p),wk=p.hours_week,pct=wk==null?null:Math.round(wk/target*100);
     const chips=Object.entries(p.statuses||{}).sort((a,b)=>b[1]-a[1])
       .map(([k,n])=>`<span class="chip">${n} ${k}</span>`).join('')||'<span class="ph-sub">No active tasks</span>';
-    grid.appendChild(el(`<div class="pcard ${p.status||'no-data'}">
+    const card=el(`<div class="pcard ${p.status||'no-data'}" data-emp="${p.name}" style="cursor:pointer">
       <div class="tcard-h">${ring(pct,s.c)}
-        <div><div class="tbig">${p.task_count??0}</div><div class="tbiglab">active tasks</div></div></div>
+        <div><div class="tbig">${p.task_count??0}</div><div class="tbiglab">active tasks</div></div>
+        <span class="grow"></span><i data-lucide="chevron-right" style="color:var(--mut2)"></i></div>
       <div class="tname">${p.name}<span class="tag">${p.is_editor?'editor':'team'}</span></div>
       <div class="rowline"><span>Capacity</span><b style="color:${s.c}">${s.l}</b></div>
       <div class="rowline"><span>Hours</span><b>${wk==null?'<span class="muted">no time data</span>':((p.hours_today==null?'·':p.hours_today)+'h today · '+wk+'/'+target+'h wk')}</b></div>
       ${p.is_editor?`<div class="rowline"><span>Videos passed</span><b>${p.completed_videos??0}</b></div>`:''}
-      <div class="stchips">${chips}</div></div>`));});
+      <div class="stchips">${chips}</div>
+      <div class="rowline" style="margin-top:10px;color:var(--indigo)"><span><i data-lucide="scan-search" style="width:13px;height:13px;vertical-align:-2px"></i> Click for all tasks &amp; deadlines</span></div></div>`);
+    card.addEventListener('click',()=>openEmployeeDrawer(p.name));
+    grid.appendChild(card);});
   v.appendChild(grid);icons();
 }
 
