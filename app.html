@@ -338,6 +338,7 @@ table.tbl tbody tr:hover{background:var(--bg)}
     <button data-tab="winners"><i data-lucide="award"></i>Winners</button>
     <button data-tab="inspo"><i data-lucide="lightbulb"></i>Inspirations</button>
     <button data-tab="team"><i data-lucide="users"></i>Team</button>
+    <button data-tab="workload"><i data-lucide="gauge"></i>Workload</button>
   </nav>
   <main>
     <div class="stalebar" id="staleBar"><i data-lucide="alert-triangle"></i><span id="staleMsg"></span></div>
@@ -422,7 +423,7 @@ function routeTo(tab){
   location.hash=tab;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
-  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam}[tab]||viewOverview)();
+  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload}[tab]||viewOverview)();
   icons();
 }
 
@@ -1079,6 +1080,126 @@ function viewTeam(){
     card.addEventListener('click',()=>openEmployeeDrawer(p.name));
     grid.appendChild(card);});
   v.appendChild(grid);icons();
+}
+
+/* WORKLOAD — editor accountability board (reads editor_tasks + editor_capacity, IST-aware) */
+let _wlTimer=null;
+function _istEodMs(){ // end of TODAY in IST (11:59:59 PM IST) as an absolute instant
+  const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  return new Date(ds+'T23:59:59+05:30').getTime();
+}
+function _istClock(){
+  return new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit',hour12:true});
+}
+async function viewWorkload(){
+  if(_wlTimer){clearInterval(_wlTimer);_wlTimer=null;}
+  await renderWorkload();
+  // auto-refresh while on this tab (data syncs every 10 min); skip if mid-edit
+  _wlTimer=setInterval(()=>{
+    if((location.hash||'').replace('#','')!=='workload'){clearInterval(_wlTimer);_wlTimer=null;return;}
+    if((document.activeElement||{}).className==='wcapin')return;
+    renderWorkload();
+  },60000);
+}
+async function renderWorkload(){
+  const v=$('#view');
+  const [tasks,caps]=(await Promise.all([
+    sb.from('editor_tasks').select('*'),
+    sb.from('editor_capacity').select('*')
+  ])).map(r=>r.data||[]);
+  v.innerHTML='';
+
+  if(!document.getElementById('workloadcss')){document.head.appendChild(el(`<style id="workloadcss">
+  .wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:4px}
+  .wcard{background:#fff;border:1px solid var(--line);border-left:5px solid #94a3b8;border-radius:12px;padding:16px}
+  .wcard.red{border-left-color:#dc2626}.wcard.amber{border-left-color:#d97706}.wcard.green{border-left-color:#16a34a}
+  .wtier{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:7px;color:#fff;white-space:nowrap}
+  .wname{font-weight:800;font-size:16px;letter-spacing:-.01em;color:#1f2937}
+  .wstats{display:flex;gap:18px;margin:13px 0 11px;flex-wrap:wrap}
+  .wstat .n{font-size:22px;font-weight:800;line-height:1;color:#1f2937}
+  .wstat .l{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
+  .wstat.bad .n{color:#dc2626}.wstat.warn .n{color:#d97706}
+  .wbar{height:9px;border-radius:6px;background:var(--line2);overflow:hidden;display:flex}
+  .wbar i{display:block;height:100%}
+  .wcap{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;color:var(--mut);flex-wrap:wrap}
+  .wcapin{width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;font-weight:700;text-align:center}
+  .wshared{font-size:10px;font-weight:700;color:#7c3aed;background:#7c3aed14;padding:2px 7px;border-radius:6px}
+  </style>`));}
+
+  if(!caps.length && !tasks.length){
+    v.appendChild(emptyState('gauge','Workload sync not connected yet','Per-editor load appears here once editor_workload_sync runs (every 10 min).'));icons();return;}
+
+  const eod=_istEodMs(),now=Date.now();
+  const by={};
+  caps.forEach(c=>{by[c.editor_id]={id:c.editor_id,name:c.editor_name,cap:c.daily_capacity||20,tasks:[]};});
+  tasks.forEach(t=>{(by[t.editor_id]||(by[t.editor_id]={id:t.editor_id,name:t.editor_name,cap:20,tasks:[]})).tasks.push(t);});
+
+  const rows=Object.values(by).map(e=>{
+    let inprog=0,overdue=0,today=0,nodue=0,shared=0;
+    e.tasks.forEach(t=>{
+      if(/progress|process/i.test(t.status||''))inprog++;
+      if(t.is_shared)shared++;
+      if(!t.due_date){nodue++;return;}
+      const ms=new Date(t.due_date).getTime();
+      if(ms<now)overdue++; else if(ms<=eod)today++;
+    });
+    const open=e.tasks.length,cap=e.cap;
+    const tier=(overdue>0||open>cap)?'red':(today>=cap||open>0.8*cap)?'amber':'green';
+    return {...e,open,inprog,overdue,today,nodue,shared,tier};
+  });
+  const ORD={red:0,amber:1,green:2};
+  rows.sort((a,b)=>ORD[a.tier]-ORD[b.tier]||b.overdue-a.overdue||b.open-a.open);
+
+  const reds=rows.filter(r=>r.tier==='red').length,ambers=rows.filter(r=>r.tier==='amber').length,greens=rows.filter(r=>r.tier==='green').length;
+  v.appendChild(el(`<div class="panel" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div class="panel-h" style="margin:0"><i data-lucide="gauge"></i><h3>Editor Workload</h3></div>
+    <div style="font-size:12.5px;color:var(--mut);display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <span><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-3px"></i> Now: <b style="color:#1f2937">${_istClock()}</b></span>
+      <span><i data-lucide="flag" style="width:14px;height:14px;vertical-align:-3px"></i> Today's deadline: <b style="color:#1f2937">11:59 PM IST</b></span>
+    </div></div>`));
+  v.appendChild(el(`<p class="ph-sub" style="margin:-4px 0 14px"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i> Sorted worst-first. A 🔴 outside work hours usually means a past 11:59 PM IST deadline lapsed — read it with the IST clock, not as live failure. Capacity is editable inline (persists).</p>`));
+  v.appendChild(el(`<div class="kpis">
+    ${kpi('alert-octagon','r',reds,'In the red')}
+    ${kpi('alert-triangle','a',ambers,'At risk')}
+    ${kpi('check-circle','g',greens,'On track')}
+    ${kpi('list-todo','i',rows.reduce((s,r)=>s+r.open,0),'Open tasks (all)')}</div>`));
+
+  const TIER={red:{l:'Red',c:'#dc2626'},amber:{l:'At-risk',c:'#d97706'},green:{l:'On track',c:'#16a34a'}};
+  const grid=el('<div class="wgrid"></div>');
+  rows.forEach(r=>{
+    const cap=r.cap,tm=TIER[r.tier],over=Math.max(0,r.open-cap);
+    const bar=over>0
+      ? `<div class="wbar"><i style="width:${(100*cap/r.open).toFixed(1)}%;background:${tm.c}"></i><i style="width:${(100*over/r.open).toFixed(1)}%;background:#dc2626;opacity:.5"></i></div>`
+      : `<div class="wbar"><i style="width:${Math.min(100,Math.round(100*r.open/Math.max(1,cap)))}%;background:${tm.c}"></i></div>`;
+    grid.appendChild(el(`<div class="wcard ${r.tier}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <span class="wname">${r.name||r.id}</span><span class="wtier" style="background:${tm.c}">${tm.l}</span></div>
+      <div class="wstats">
+        <div class="wstat"><div class="n">${r.open}</div><div class="l">Open</div></div>
+        <div class="wstat"><div class="n">${r.inprog}</div><div class="l">In&nbsp;progress</div></div>
+        <div class="wstat ${r.today>0?'warn':''}"><div class="n">${r.today}</div><div class="l">Due&nbsp;today</div></div>
+        <div class="wstat ${r.overdue>0?'bad':''}"><div class="n">${r.overdue}</div><div class="l">Overdue</div></div>
+      </div>
+      ${bar}
+      <div class="wcap">
+        <span>Capacity</span>
+        <input class="wcapin" type="number" min="1" max="100" value="${cap}" data-eid="${r.id}">
+        <span>/day · ${r.open}/${cap} used${over>0?` · <b style="color:#dc2626">${over} over</b>`:''}</span>
+        ${r.shared>0?`<span class="wshared" title="Counted for each assignee — not double-penalized">${r.shared} shared</span>`:''}
+        ${r.nodue>0?`<span style="font-size:10px">${r.nodue} no&nbsp;date</span>`:''}
+      </div></div>`));
+  });
+  v.appendChild(grid);
+
+  grid.querySelectorAll('.wcapin').forEach(inp=>inp.addEventListener('change',async()=>{
+    const eid=inp.dataset.eid,val=Math.max(1,Math.min(100,parseInt(inp.value)||20));
+    inp.disabled=true;
+    const {error}=await sb.from('editor_capacity').update(
+      {daily_capacity:val,updated_at:new Date().toISOString(),updated_by:(($('#userEmail')||{}).textContent||'')}).eq('editor_id',eid);
+    inp.disabled=false;
+    if(!error)renderWorkload();
+  }));
+  icons();
 }
 
 function emptyState(ic,title,msg){
