@@ -1091,6 +1091,25 @@ function _istEodMs(){ // end of TODAY in IST (11:59:59 PM IST) as an absolute in
 function _istClock(){
   return new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit',hour12:true});
 }
+// bandwidth spread (mirrors workload.py): unstarted set, priority order, 11:59 PM IST per day
+const WL_UNSTARTED=new Set(['to do','todo','to-do','not started','open','backlog']);
+const WL_PRIO={urgent:0,high:1,normal:2,low:3};
+function _wlDeadlineMs(off){const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(Date.now()+off*864e5);return new Date(ds+'T23:59:00+05:30').getTime();}
+function _cuToken(){let t=localStorage.getItem('cu_token');if(!t){t=prompt('Paste your ClickUp personal API token (stored only in this browser; used to write due dates):');if(t){t=t.trim();localStorage.setItem('cu_token',t);}}return (t||'').trim();}
+async function _cuPut(path,body){const tok=_cuToken();if(!tok)throw new Error('no ClickUp token');const r=await fetch('/api/clickup?path='+encodeURIComponent(path)+'&v=2',{method:'PUT',headers:{'Authorization':tok,'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok;}
+async function _applySpread(ed,btn){
+  const re=(ed.tasks||[]).filter(t=>WL_UNSTARTED.has((t.status||'').trim().toLowerCase()));
+  if(!re.length)return;
+  if(!confirm(`Apply bandwidth-spread due dates to ${re.length} unstarted task(s) for ${ed.name}?\n(writes due_date to ClickUp; spread over ~${Math.ceil(re.length/ed.cap)} day(s) at 11:59 PM IST)`))return;
+  re.sort((a,b)=>((WL_PRIO[(a.priority||'').toLowerCase()]??9)-(WL_PRIO[(b.priority||'').toLowerCase()]??9))||String(a.date_created||'').localeCompare(String(b.date_created||'')));
+  btn.disabled=true;const lbl=btn.textContent;btn.textContent='Applying…';
+  let ok=0,fail=0;
+  for(let i=0;i<re.length;i++){
+    try{ (await _cuPut('/task/'+re[i].task_id,{due_date:_wlDeadlineMs(Math.floor(i/ed.cap)),due_date_time:true})) ? ok++ : fail++; }
+    catch(e){fail++; if(String(e).includes('token')){btn.textContent='Need ClickUp token';btn.disabled=false;return;}}
+  }
+  btn.textContent=`✓ ${ok} set${fail?` · ${fail} failed`:''} · board updates next sync (≤10m)`;
+}
 async function viewWorkload(){
   if(_wlTimer){clearInterval(_wlTimer);_wlTimer=null;}
   await renderWorkload();
@@ -1124,6 +1143,8 @@ async function renderWorkload(){
   .wcap{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;color:var(--mut);flex-wrap:wrap}
   .wcapin{width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;font-weight:700;text-align:center}
   .wshared{font-size:10px;font-weight:700;color:#7c3aed;background:#7c3aed14;padding:2px 7px;border-radius:6px}
+  .wapply{margin-top:11px;width:100%;padding:7px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;color:#1f2937;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+  .wapply:hover{background:#eef2f7}.wapply:disabled{opacity:.65;cursor:default}
   </style>`));}
 
   if(!caps.length && !tasks.length){
@@ -1147,7 +1168,8 @@ async function renderWorkload(){
     // spread-aware: overload = more due TODAY than daily cap (total open is a multi-day queue
     // once dates are spread, not a today-pileup). red=overdue|today>cap · amber=near-today|backlog
     const tier=(overdue>0||today>cap)?'red':(today>=0.8*cap||open>cap)?'amber':'green';
-    return {...e,open,inprog,overdue,today,nodue,shared,tier};
+    const redate=e.tasks.filter(t=>WL_UNSTARTED.has((t.status||'').trim().toLowerCase())).length;
+    return {...e,open,inprog,overdue,today,nodue,shared,tier,redate};
   });
   const ORD={red:0,amber:1,green:2};
   rows.sort((a,b)=>ORD[a.tier]-ORD[b.tier]||b.overdue-a.overdue||b.open-a.open);
@@ -1189,7 +1211,9 @@ async function renderWorkload(){
         <span>/day · today ${r.today}/${cap}${tOver>0?` · <b style="color:#dc2626">${tOver} over</b>`:''} · ${r.open} open${r.open>cap?` · ~${qDays}d queue`:''}</span>
         ${r.shared>0?`<span class="wshared" title="Counted for each assignee — not double-penalized">${r.shared} shared</span>`:''}
         ${r.nodue>0?`<span style="font-size:10px">${r.nodue} no&nbsp;date</span>`:''}
-      </div></div>`));
+      </div>
+      ${r.redate>0?`<button class="wapply" data-eid="${r.id}"><i data-lucide="calendar-clock" style="width:13px;height:13px;vertical-align:-2px"></i> Apply suggested dates (${r.redate})</button>`:''}
+      </div>`));
   });
   v.appendChild(grid);
 
@@ -1200,6 +1224,9 @@ async function renderWorkload(){
       {daily_capacity:val,updated_at:new Date().toISOString(),updated_by:(($('#userEmail')||{}).textContent||'')}).eq('editor_id',eid);
     inp.disabled=false;
     if(!error)renderWorkload();
+  }));
+  grid.querySelectorAll('.wapply').forEach(btn=>btn.addEventListener('click',()=>{
+    const ed=rows.find(r=>r.id===btn.dataset.eid); if(ed)_applySpread(ed,btn);
   }));
   icons();
 }
