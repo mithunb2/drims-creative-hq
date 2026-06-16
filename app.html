@@ -1144,7 +1144,9 @@ async function renderWorkload(){
       if(ms<now)overdue++; else if(ms<=eod)today++;
     });
     const open=e.tasks.length,cap=e.cap;
-    const tier=(overdue>0||open>cap)?'red':(today>=cap||open>0.8*cap)?'amber':'green';
+    // spread-aware: overload = more due TODAY than daily cap (total open is a multi-day queue
+    // once dates are spread, not a today-pileup). red=overdue|today>cap · amber=near-today|backlog
+    const tier=(overdue>0||today>cap)?'red':(today>=0.8*cap||open>cap)?'amber':'green';
     return {...e,open,inprog,overdue,today,nodue,shared,tier};
   });
   const ORD={red:0,amber:1,green:2};
@@ -1167,10 +1169,10 @@ async function renderWorkload(){
   const TIER={red:{l:'Red',c:'#dc2626'},amber:{l:'At-risk',c:'#d97706'},green:{l:'On track',c:'#16a34a'}};
   const grid=el('<div class="wgrid"></div>');
   rows.forEach(r=>{
-    const cap=r.cap,tm=TIER[r.tier],over=Math.max(0,r.open-cap);
-    const bar=over>0
-      ? `<div class="wbar"><i style="width:${(100*cap/r.open).toFixed(1)}%;background:${tm.c}"></i><i style="width:${(100*over/r.open).toFixed(1)}%;background:#dc2626;opacity:.5"></i></div>`
-      : `<div class="wbar"><i style="width:${Math.min(100,Math.round(100*r.open/Math.max(1,cap)))}%;background:${tm.c}"></i></div>`;
+    const cap=r.cap,tm=TIER[r.tier],tOver=Math.max(0,r.today-cap),qDays=Math.max(1,Math.ceil(r.open/cap));
+    const bar=tOver>0
+      ? `<div class="wbar"><i style="width:${(100*cap/r.today).toFixed(1)}%;background:${tm.c}"></i><i style="width:${(100*tOver/r.today).toFixed(1)}%;background:#dc2626;opacity:.5"></i></div>`
+      : `<div class="wbar"><i style="width:${Math.min(100,Math.round(100*r.today/Math.max(1,cap)))}%;background:${tm.c}"></i></div>`;
     grid.appendChild(el(`<div class="wcard ${r.tier}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <span class="wname">${r.name||r.id}</span><span class="wtier" style="background:${tm.c}">${tm.l}</span></div>
@@ -1184,7 +1186,7 @@ async function renderWorkload(){
       <div class="wcap">
         <span>Capacity</span>
         <input class="wcapin" type="number" min="1" max="100" value="${cap}" data-eid="${r.id}">
-        <span>/day · ${r.open}/${cap} used${over>0?` · <b style="color:#dc2626">${over} over</b>`:''}</span>
+        <span>/day · today ${r.today}/${cap}${tOver>0?` · <b style="color:#dc2626">${tOver} over</b>`:''} · ${r.open} open${r.open>cap?` · ~${qDays}d queue`:''}</span>
         ${r.shared>0?`<span class="wshared" title="Counted for each assignee — not double-penalized">${r.shared} shared</span>`:''}
         ${r.nodue>0?`<span style="font-size:10px">${r.nodue} no&nbsp;date</span>`:''}
       </div></div>`));
