@@ -1246,18 +1246,21 @@ async function renderWorkload(){
    .wbadge2{font-size:9px;font-weight:700;color:#7c3aed;background:#7c3aed14;padding:1px 5px;border-radius:4px;margin-left:6px;vertical-align:middle}
    .wfoot{font-size:11px;color:var(--mut);margin-top:11px;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
    .wfoot span{cursor:default}
+   .wtog{cursor:pointer}.wtog td{padding:11px 14px;background:#f6faf7;font-size:12.5px;color:#15803d;font-weight:700}
+   .wtog:hover td{background:#edf6ef}
+   .wtogchev{display:inline-block;width:11px;color:#16a34a;font-weight:800}
+   .wgreenrow td{background:#fcfdfc}
   </style>`));}
   const tbl=el(`<table class="wtbl"><thead><tr>
     <th>Status</th><th>Editor</th>
     <th class="num">Overdue</th><th class="num">Due today</th><th class="num">Open</th>
     <th class="num">Hrs 7d</th>${hasOutput?'<th class="num">Vids/hr</th>':''}<th class="num">Cap</th><th></th>
   </tr></thead><tbody></tbody></table>`);
-  const tb=tbl.querySelector('tbody');
-  rows.forEach(r=>{
+  const tb=tbl.querySelector('tbody'),colN=hasOutput?9:8;
+  const cells=r=>{
     const s=REASON(r);
     const dueCls=r.today>r.cap?'bad':(r.today>0&&r.today>=0.8*r.cap?'warn':(r.today>0?'':'zero'));
-    tb.appendChild(el(`<tr class="${r.tier}">
-      <td><span class="wpill2 ${s.pill}"><span class="dot"></span>${s.label}</span></td>
+    return `<td><span class="wpill2 ${s.pill}"><span class="dot"></span>${s.label}</span></td>
       <td><span class="wename2">${r.name||r.id}</span>${r.shared>0?`<span class="wbadge2" title="${r.shared} task(s) shared — counted for each editor, not double-penalized">${r.shared} shared</span>`:''}<div class="wwhy ${s.pill}">${s.why}</div></td>
       <td class="num"><span class="wn ${r.overdue>0?'bad':'zero'}">${r.overdue}</span></td>
       <td class="num"><span class="wn ${dueCls}">${r.today}</span></td>
@@ -1265,10 +1268,24 @@ async function renderWorkload(){
       <td class="num"><span class="wn" title="${r.hrsT||0}h logged today">${r.hrs7||0}<small>h</small></span></td>
       ${hasOutput?`<td class="num"><span class="wn ${r.ratio?'':'zero'}">${r.ratio||'—'}</span></td>`:''}
       <td class="num"><input class="wcapin2" type="number" min="1" max="100" value="${r.cap}" data-eid="${r.id}" title="Daily capacity — editable"></td>
-      <td>${r.redate>0?`<button class="wact2" data-eid="${r.id}"><i data-lucide="calendar-clock" style="width:13px;height:13px"></i> Spread dates (${r.redate})</button>`:''}</td>
-    </tr>`));
-  });
+      <td>${r.redate>0?`<button class="wact2" data-eid="${r.id}"><i data-lucide="calendar-clock" style="width:13px;height:13px"></i> Spread dates (${r.redate})</button>`:''}</td>`;
+  };
+  const trHtml=(r,cls,style)=>`<tr class="${r.tier}${cls||''}"${style?` style="${style}"`:''}>${cells(r)}</tr>`;
+  // reds/at-risk shown; on-track collapsed into a one-line expander (default closed)
+  const attn=rows.filter(r=>r.tier!=='green'),okRows=rows.filter(r=>r.tier==='green');
+  let body=attn.map(r=>trHtml(r)).join('');
+  if(okRows.length){
+    body+=`<tr class="wtog" id="wtogrow"><td colspan="${colN}"><span class="wtogchev">▸</span> ✓ ${okRows.length} on track <span style="color:var(--mut);font-weight:500">— ${okRows.map(g=>g.name||g.id).join(', ')}</span></td></tr>`;
+    body+=okRows.map(r=>trHtml(r,' wgreenrow','display:none')).join('');
+  }
+  tb.innerHTML=body||`<tr><td colspan="${colN}" style="text-align:center;color:var(--mut);padding:20px">No editor data yet.</td></tr>`;
   v.appendChild(tbl);
+  const tog=tbl.querySelector('#wtogrow');
+  if(tog)tog.addEventListener('click',()=>{
+    const gr=tbl.querySelectorAll('.wgreenrow'),hidden=gr[0].style.display==='none';
+    gr.forEach(x=>x.style.display=hidden?'':'none');
+    tog.querySelector('.wtogchev').textContent=hidden?'▾':'▸';
+  });
   const totalClosed=rows.reduce((s,r)=>s+r.comp7,0);
   v.appendChild(el(`<div class="wfoot">
     <span><i data-lucide="clock" style="width:12px;height:12px;vertical-align:-2px"></i> Hours: Jibble (live)</span>
