@@ -1204,51 +1204,79 @@ async function renderWorkload(){
       <span><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-3px"></i> Now: <b style="color:#1f2937">${_istClock()}</b></span>
       <span><i data-lucide="flag" style="width:14px;height:14px;vertical-align:-3px"></i> Today's deadline: <b style="color:#1f2937">11:59 PM IST</b></span>
     </div></div>`));
-  v.appendChild(el(`<p class="ph-sub" style="margin:-4px 0 14px"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i> Sorted worst-first; a 🔴 outside work hours usually means a past 11:59 PM IST deadline lapsed — read it with the IST clock. <b>Productivity = videos ÷ hours</b>: hours are from Jibble (reliable); videos are self-reported for now (auto file-counts from Drive later). ClickUp "tasks closed" is a partial diagnostic only — it captures ~1–2/day, not real output. Capacity editable inline.</p>`));
+  v.appendChild(el(`<p class="ph-sub" style="margin:-4px 0 14px"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i> Sorted worst-first — scan the red. A 🔴 after hours usually means a lapsed 11:59 PM IST deadline (read with the IST clock). Hours are live from Jibble; capacity is editable.</p>`));
   v.appendChild(el(`<div class="kpis">
     ${kpi('alert-octagon','r',reds,'In the red')}
     ${kpi('alert-triangle','a',ambers,'At risk')}
     ${kpi('check-circle','g',greens,'On track')}
     ${kpi('list-todo','i',rows.reduce((s,r)=>s+r.open,0),'Open tasks (all)')}</div>`));
 
-  const TIER={red:{l:'Red',c:'#dc2626'},amber:{l:'At-risk',c:'#d97706'},green:{l:'On track',c:'#16a34a'}};
-  const grid=el('<div class="wgrid"></div>');
+  // ── clean sorted TABLE — who's red in 2 seconds ─────────────────────────
+  // one dominant signal per row: status pill + the single reason that matters.
+  const REASON=r=>{
+    if(r.overdue>0)                   return {pill:'red',  label:'RED',     why:`${r.overdue} overdue`};
+    if(r.today>r.cap)                 return {pill:'red',  label:'RED',     why:`${r.today} due today · cap ${r.cap}`};
+    if(r.today>0&&r.today>=0.8*r.cap) return {pill:'amber',label:'AT RISK', why:`${r.today}/${r.cap} due today`};
+    if(r.open>r.cap)                  return {pill:'amber',label:'AT RISK', why:`${r.open} queued · ~${Math.ceil(r.open/r.cap)}d`};
+    return {pill:'green',label:'ON TRACK', why:'clear'};
+  };
+  // productivity columns stay HIDDEN until real output exists (no empty "—" clutter)
+  const hasOutput=rows.some(r=>r.vid7>0||(r.vidT!=null&&r.vidT!==''));
+  if(!document.getElementById('wtblcss')){document.head.appendChild(el(`<style id="wtblcss">
+   .wtbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+   .wtbl thead th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:10px 14px;background:#f8fafc;border-bottom:1px solid var(--line);white-space:nowrap}
+   .wtbl thead th.num,.wtbl td.num{text-align:center}
+   .wtbl tbody td{padding:12px 14px;border-bottom:1px solid var(--line2);vertical-align:middle}
+   .wtbl tbody tr:last-child td{border-bottom:none}
+   .wtbl tbody tr.red{background:#fef2f2}
+   .wtbl tbody tr:hover{background:#f1f5f9}.wtbl tbody tr.red:hover{background:#fde8e8}
+   .wpill2{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:4px 10px;border-radius:999px;white-space:nowrap}
+   .wpill2 .dot{width:7px;height:7px;border-radius:50%}
+   .wpill2.red{background:#dc26261a;color:#dc2626}.wpill2.red .dot{background:#dc2626}
+   .wpill2.amber{background:#d977061a;color:#b45309}.wpill2.amber .dot{background:#d97706}
+   .wpill2.green{background:#16a34a1a;color:#15803d}.wpill2.green .dot{background:#16a34a}
+   .wename2{font-weight:800;font-size:14.5px;color:#1f2937}
+   .wwhy{font-size:12px;margin-top:2px;color:var(--mut)}
+   .wwhy.red{color:#dc2626;font-weight:700}.wwhy.amber{color:#b45309;font-weight:600}
+   .wn{font-size:15px;font-weight:800;color:#1f2937}.wn.bad{color:#dc2626}.wn.warn{color:#b45309}.wn.zero{color:#cbd5e1;font-weight:600}
+   .wn small{font-size:10px;font-weight:600;color:var(--mut)}
+   .wcapin2{width:46px;padding:4px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-weight:700;text-align:center}
+   .wact2{padding:6px 11px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#1f2937;font-weight:700;font-size:11.5px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+   .wact2:hover{background:#f1f5f9;border-color:#cbd5e1}.wact2:disabled{opacity:.6;cursor:default}
+   .wbadge2{font-size:9px;font-weight:700;color:#7c3aed;background:#7c3aed14;padding:1px 5px;border-radius:4px;margin-left:6px;vertical-align:middle}
+   .wfoot{font-size:11px;color:var(--mut);margin-top:11px;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+   .wfoot span{cursor:default}
+  </style>`));}
+  const tbl=el(`<table class="wtbl"><thead><tr>
+    <th>Status</th><th>Editor</th>
+    <th class="num">Overdue</th><th class="num">Due today</th><th class="num">Open</th>
+    <th class="num">Hrs 7d</th>${hasOutput?'<th class="num">Vids/hr</th>':''}<th class="num">Cap</th><th></th>
+  </tr></thead><tbody></tbody></table>`);
+  const tb=tbl.querySelector('tbody');
   rows.forEach(r=>{
-    const cap=r.cap,tm=TIER[r.tier],tOver=Math.max(0,r.today-cap),qDays=Math.max(1,Math.ceil(r.open/cap));
-    const bar=tOver>0
-      ? `<div class="wbar"><i style="width:${(100*cap/r.today).toFixed(1)}%;background:${tm.c}"></i><i style="width:${(100*tOver/r.today).toFixed(1)}%;background:#dc2626;opacity:.5"></i></div>`
-      : `<div class="wbar"><i style="width:${Math.min(100,Math.round(100*r.today/Math.max(1,cap)))}%;background:${tm.c}"></i></div>`;
-    grid.appendChild(el(`<div class="wcard ${r.tier}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-        <span class="wname">${r.name||r.id}</span><span class="wtier" style="background:${tm.c}">${tm.l}</span></div>
-      <div class="wstats">
-        <div class="wstat"><div class="n">${r.open}</div><div class="l">Open</div></div>
-        <div class="wstat"><div class="n">${r.inprog}</div><div class="l">In&nbsp;progress</div></div>
-        <div class="wstat ${r.today>0?'warn':''}"><div class="n">${r.today}</div><div class="l">Due&nbsp;today</div></div>
-        <div class="wstat ${r.overdue>0?'bad':''}"><div class="n">${r.overdue}</div><div class="l">Overdue</div></div>
-      </div>
-      ${bar}
-      <div class="wcap">
-        <span>Capacity</span>
-        <input class="wcapin" type="number" min="1" max="100" value="${cap}" data-eid="${r.id}">
-        <span>/day · today ${r.today}/${cap}${tOver>0?` · <b style="color:#dc2626">${tOver} over</b>`:''} · ${r.open} open${r.open>cap?` · ~${qDays}d queue`:''}</span>
-        ${r.shared>0?`<span class="wshared" title="Counted for each assignee — not double-penalized">${r.shared} shared</span>`:''}
-        ${r.nodue>0?`<span style="font-size:10px">${r.nodue} no&nbsp;date</span>`:''}
-      </div>
-      <div class="wprod">
-        <div class="wp"><div class="n">${r.hrsT||0}<span style="font-size:11px">h</span></div><div class="l">Hrs today</div></div>
-        <div class="wp"><div class="n">${r.hrs7||0}<span style="font-size:11px">h</span></div><div class="l">Hrs 7d</div></div>
-        <div class="wp"><div class="n">${r.vid7||'—'}</div><div class="l">Videos 7d</div></div>
-        <div class="wp"><div class="n" style="color:${r.ratio?'#1f2937':'#cbd5e1'}">${r.ratio||'—'}</div><div class="l">Vids/hr</div></div>
-      </div>
-      <div class="wself"><span>Videos done today:</span><input class="wvidin" type="number" min="0" max="200" value="${r.vidT??''}" placeholder="—" data-eid="${r.id}"><span class="wself-h">${r.hrsT?`${r.hrsT}h logged`:'no hours logged yet'}</span></div>
-      <div class="wtracknote"><i data-lucide="git-commit" style="width:11px;height:11px;vertical-align:-1px"></i> ClickUp tasks closed 7d: <b>${r.comp7}</b> <span style="opacity:.7">— partial, NOT full output</span></div>
-      ${r.redate>0?`<button class="wapply" data-eid="${r.id}"><i data-lucide="calendar-clock" style="width:13px;height:13px;vertical-align:-2px"></i> Apply suggested dates (${r.redate})</button>`:''}
-      </div>`));
+    const s=REASON(r);
+    const dueCls=r.today>r.cap?'bad':(r.today>0&&r.today>=0.8*r.cap?'warn':(r.today>0?'':'zero'));
+    tb.appendChild(el(`<tr class="${r.tier}">
+      <td><span class="wpill2 ${s.pill}"><span class="dot"></span>${s.label}</span></td>
+      <td><span class="wename2">${r.name||r.id}</span>${r.shared>0?`<span class="wbadge2" title="${r.shared} task(s) shared — counted for each editor, not double-penalized">${r.shared} shared</span>`:''}<div class="wwhy ${s.pill}">${s.why}</div></td>
+      <td class="num"><span class="wn ${r.overdue>0?'bad':'zero'}">${r.overdue}</span></td>
+      <td class="num"><span class="wn ${dueCls}">${r.today}</span></td>
+      <td class="num"><span class="wn ${r.open?'':'zero'}">${r.open}</span></td>
+      <td class="num"><span class="wn" title="${r.hrsT||0}h logged today">${r.hrs7||0}<small>h</small></span></td>
+      ${hasOutput?`<td class="num"><span class="wn ${r.ratio?'':'zero'}">${r.ratio||'—'}</span></td>`:''}
+      <td class="num"><input class="wcapin2" type="number" min="1" max="100" value="${r.cap}" data-eid="${r.id}" title="Daily capacity — editable"></td>
+      <td>${r.redate>0?`<button class="wact2" data-eid="${r.id}"><i data-lucide="calendar-clock" style="width:13px;height:13px"></i> Spread dates (${r.redate})</button>`:''}</td>
+    </tr>`));
   });
-  v.appendChild(grid);
+  v.appendChild(tbl);
+  const totalClosed=rows.reduce((s,r)=>s+r.comp7,0);
+  v.appendChild(el(`<div class="wfoot">
+    <span><i data-lucide="clock" style="width:12px;height:12px;vertical-align:-2px"></i> Hours: Jibble (live)</span>
+    <span title="ClickUp task-closes capture only ~1–2/day — a partial diagnostic, NOT real video output. Real output tracking (Drive auto-count) is pending.">ⓘ ${totalClosed} ClickUp tasks closed / 7d (partial signal)</span>
+    ${!hasOutput?'<span title="Videos-per-hour appears here once output tracking (Drive auto-count) is live.">ⓘ Productivity ratio pending output tracking</span>':''}
+  </div>`));
 
-  grid.querySelectorAll('.wcapin').forEach(inp=>inp.addEventListener('change',async()=>{
+  tbl.querySelectorAll('.wcapin2').forEach(inp=>inp.addEventListener('change',async()=>{
     const eid=inp.dataset.eid,val=Math.max(1,Math.min(100,parseInt(inp.value)||20));
     inp.disabled=true;
     const {error}=await sb.from('editor_capacity').update(
@@ -1256,18 +1284,8 @@ async function renderWorkload(){
     inp.disabled=false;
     if(!error)renderWorkload();
   }));
-  grid.querySelectorAll('.wapply').forEach(btn=>btn.addEventListener('click',()=>{
+  tbl.querySelectorAll('.wact2').forEach(btn=>btn.addEventListener('click',()=>{
     const ed=rows.find(r=>r.id===btn.dataset.eid); if(ed)_applySpread(ed,btn);
-  }));
-  grid.querySelectorAll('.wvidin').forEach(inp=>inp.addEventListener('change',async()=>{
-    const eid=inp.dataset.eid,val=Math.max(0,Math.min(200,parseInt(inp.value)||0));
-    inp.disabled=true;
-    const {error}=await sb.from('editor_output').upsert(
-      {editor_id:eid,work_date:todayStr,videos:val,source:'self_report',
-       updated_by:(($('#userEmail')||{}).textContent||''),updated_at:new Date().toISOString()},
-      {onConflict:'editor_id,work_date'});
-    inp.disabled=false;
-    if(error)alert('Could not save: '+(error.message||error));else renderWorkload();
   }));
   icons();
 }
