@@ -1389,12 +1389,18 @@ async function renderPerformance(){
   const by={};
   caps.forEach(c=>{by[c.editor_id]={id:c.editor_id,name:c.editor_name,cap:c.daily_capacity||20};});
   Object.keys(HRS).forEach(id=>{if(!by[id])by[id]={id,name:id,cap:20};});  // hours but no roster row → still show
-  const winnersFlowing=false;  // flip on once Verdict-dropdown winners populate (then winners/bonus light up)
+  // Winners have NO source today: Verdict field is being deleted (0% filled), status/verdict_watcher
+  // is unused (Production empty, 0 winners ever marked). Real signal is in the buyer's head from Meta,
+  // recorded nowhere. A lightweight intake (channel TBD — pending buyer answer) is the planned source.
+  // To light this up later: build a WIN[editor_id] map (range-summed, same shape as HRS/VID) and flip
+  // winnersFlowing=true. Do NOT wire to Verdict or status — both empty. Nothing else here changes.
+  const winnersFlowing=false;
+  const WIN={};  // ← future intake populates this (per editor_id, winners in [rg.start, rg.end])
   const rows=Object.values(by).map(e=>{
     const hrs=Math.round((HRS[e.id]||0)*10)/10, days=DAYS[e.id]?DAYS[e.id].size:0;
     const vids=VID[e.id]||0, comp=COMP[e.id]||0, avg=days>0?Math.round(hrs/days*10)/10:0;
     const ratio=(hrs>0&&vids>0)?(vids/hrs).toFixed(2):null;
-    const winners=0, bonus=winners*BONUS_PER_WINNER;
+    const winners=WIN[e.id]||0, bonus=winners*BONUS_PER_WINNER;
     return {...e,hrs,days,vids,comp,avg,ratio,winners,bonus};
   });
   rows.sort((a,b)=>b.hrs-a.hrs||b.comp-a.comp||String(a.name).localeCompare(String(b.name)));  // hours = the trusted spine
@@ -1431,7 +1437,7 @@ async function renderPerformance(){
     <div class="perfrange"><i data-lucide="calendar-range" style="width:15px;height:15px"></i> <b>${_prettyDay(rg.start)} – ${_prettyDay(rg.end)}</b> · ${spanDays}d · IST</div>
   </div>`));
 
-  v.appendChild(el(`<div class="perfnote"><i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i> <b>Hours (Jibble) is the only fully-trusted signal today.</b> Videos, winners & bonus are shown as columns but are <b>pending data wiring</b> — they fill once editors' output flows (Drive sync) and winners get marked (Verdict dropdown). The view is intentionally thin until then. Every period is computed in <b>IST</b>, so month / payroll boundaries are correct no matter where you view from.</div>`));
+  v.appendChild(el(`<div class="perfnote"><i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i> <b>Hours (Jibble) is the only fully-trusted signal today.</b> Videos, winners & bonus are shown as columns but are <b>pending data wiring</b> — they fill once editors' output flows (Drive sync) and a winner intake exists (channel TBD — pending buyer). The view is intentionally thin until then. Every period is computed in <b>IST</b>, so month / payroll boundaries are correct no matter where you view from.</div>`));
 
   v.appendChild(el(`<div class="kpis">
     ${kpi('clock','i',totHrs+'h','Hours logged · period')}
@@ -1455,8 +1461,8 @@ async function renderPerformance(){
     <td class="num"><span class="pn ${r.vids?'':'zero'}" ${r.vids?'':'title="pending Drive output sync"'}>${r.vids||'—'}</span></td>
     <td class="num"><span class="pn ${r.ratio?'':'zero'}">${r.ratio||'—'}</span></td>
     <td class="num"><span class="pn ${r.comp?'':'zero'}" title="ClickUp task-closes — partial, under-counts real output ~90%">${r.comp||'—'}</span></td>
-    <td class="num"><span class="pn zero" title="mark Verdict = winner in ClickUp to populate">${winnersFlowing?r.winners:'—'}</span></td>
-    <td class="num"><span class="pn zero" title="₹${BONUS_PER_WINNER}/winner · admin/payroll only">${winnersFlowing?_inr(r.bonus):'—'}</span></td>
+    <td class="num"><span class="pn zero" title="winners — pending a dedicated intake (channel TBD); not wired to any field yet">${winnersFlowing?r.winners:'—'}</span></td>
+    <td class="num"><span class="pn zero" title="₹${BONUS_PER_WINNER}/winner · admin/payroll only · fills once a winner intake exists">${winnersFlowing?_inr(r.bonus):'—'}</span></td>
   </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;color:var(--mut);padding:20px">No editor data in this range.</td></tr>`;
   v.appendChild(tbl);
 
@@ -1464,7 +1470,7 @@ async function renderPerformance(){
     <span><i data-lucide="clock" style="width:12px;height:12px;vertical-align:-2px"></i> Hours: Jibble (reliable)</span>
     <span title="ClickUp task-closes capture only ~1–2/day — partial, NOT real video output.">ⓘ *Closes = ${totComp} ClickUp closes (partial signal)</span>
     ${compLimited?'<span style="color:#b45309">⚠ Closes retained ~40 days — earlier part of this range is incomplete</span>':''}
-    <span title="Bonus = ₹${BONUS_PER_WINNER} per winner. Admin/payroll only — not editor-facing.">ⓘ Bonus ₹ &amp; Winners unlock once Verdict marking starts</span>
+    <span title="Bonus = ₹${BONUS_PER_WINNER} per winner. Admin/payroll only — not editor-facing.">ⓘ Bonus ₹ &amp; Winners unlock once a winner intake exists (TBD — pending buyer)</span>
   </div>`));
 
   // wire the picker
