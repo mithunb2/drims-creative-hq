@@ -338,7 +338,8 @@ table.tbl tbody tr:hover{background:var(--bg)}
     <button data-tab="winners"><i data-lucide="award"></i>Winners</button>
     <button data-tab="inspo"><i data-lucide="lightbulb"></i>Inspirations</button>
     <button data-tab="team"><i data-lucide="users"></i>Team</button>
-    <button data-tab="workload"><i data-lucide="gauge"></i>Workload</button>
+    <button data-tab="workload"><i data-lucide="gauge"></i>Live</button>
+    <button data-tab="performance"><i data-lucide="bar-chart-3"></i>Performance</button>
   </nav>
   <main>
     <div class="stalebar" id="staleBar"><i data-lucide="alert-triangle"></i><span id="staleMsg"></span></div>
@@ -423,7 +424,7 @@ function routeTo(tab){
   location.hash=tab;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
-  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload}[tab]||viewOverview)();
+  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance}[tab]||viewOverview)();
   icons();
 }
 
@@ -1176,35 +1177,40 @@ async function renderWorkload(){
   comps.forEach(c=>{if(c.done_date&&new Date(c.done_date).getTime()>=wkAgo)COMP7[c.editor_id]=(COMP7[c.editor_id]||0)+1;});
 
   const rows=Object.values(by).map(e=>{
-    let inprog=0,overdue=0,today=0,nodue=0,shared=0;
+    let inprog=0,overdue=0,stale=0,today=0,nodue=0,shared=0;
     e.tasks.forEach(t=>{
+      const st=(t.status||'').trim().toLowerCase();
+      const started=!WL_UNSTARTED.has(st);   // anything not in the to-do/backlog set is in-flight
       if(/progress|process/i.test(t.status||''))inprog++;
       if(t.is_shared)shared++;
       if(!t.due_date){nodue++;return;}
       const ms=new Date(t.due_date).getTime();
-      if(ms<now)overdue++; else if(ms<=eod)today++;
+      // REAL overdue = started work that blew its deadline. Past-due-but-UNSTARTED is the old
+      // impossible-deadline artifact ("stale") — it means "reschedule", not "this editor is behind".
+      if(ms<now){ started?overdue++:stale++; } else if(ms<=eod)today++;
     });
     const open=e.tasks.length,cap=e.cap;
     // spread-aware: overload = more due TODAY than daily cap (total open is a multi-day queue
-    // once dates are spread, not a today-pileup). red=overdue|today>cap · amber=near-today|backlog
-    const tier=(overdue>0||today>cap)?'red':(today>=0.8*cap||open>cap)?'amber':'green';
+    // once dates are spread, not a today-pileup). red = REAL overdue (in-flight & late) | today>cap.
+    // stale (unstarted past-due) is amber "reschedule", never red — it's the deadline artifact.
+    const tier=(overdue>0||today>cap)?'red':(stale>0||today>=0.8*cap||open>cap)?'amber':'green';
     const redate=e.tasks.filter(t=>WL_UNSTARTED.has((t.status||'').trim().toLowerCase())).length;
     const hrs7=Math.round((HRS7[e.id]||0)*10)/10,hrsT=Math.round((HRST[e.id]||0)*10)/10;
     const vid7=VID7[e.id]||0,vidT=VIDT[e.id],comp7=COMP7[e.id]||0;
     const ratio=(hrs7>0&&vid7>0)?(vid7/hrs7).toFixed(2):null;  // videos per logged hour (7d)
-    return {...e,open,inprog,overdue,today,nodue,shared,tier,redate,hrs7,hrsT,vid7,vidT,comp7,ratio};
+    return {...e,open,inprog,overdue,stale,today,nodue,shared,tier,redate,hrs7,hrsT,vid7,vidT,comp7,ratio};
   });
   const ORD={red:0,amber:1,green:2};
   rows.sort((a,b)=>ORD[a.tier]-ORD[b.tier]||b.overdue-a.overdue||b.open-a.open);
 
   const reds=rows.filter(r=>r.tier==='red').length,ambers=rows.filter(r=>r.tier==='amber').length,greens=rows.filter(r=>r.tier==='green').length;
   v.appendChild(el(`<div class="panel" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-    <div class="panel-h" style="margin:0"><i data-lucide="gauge"></i><h3>Editor Workload</h3></div>
+    <div class="panel-h" style="margin:0"><i data-lucide="gauge"></i><h3>Live — Who's stuck right now</h3></div>
     <div style="font-size:12.5px;color:var(--mut);display:flex;align-items:center;gap:16px;flex-wrap:wrap">
       <span><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-3px"></i> Now: <b style="color:#1f2937">${_istClock()}</b></span>
       <span><i data-lucide="flag" style="width:14px;height:14px;vertical-align:-3px"></i> Today's deadline: <b style="color:#1f2937">11:59 PM IST</b></span>
     </div></div>`));
-  v.appendChild(el(`<p class="ph-sub" style="margin:-4px 0 14px"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i> Sorted worst-first — scan the red. A 🔴 after hours usually means a lapsed 11:59 PM IST deadline (read with the IST clock). Hours are live from Jibble; capacity is editable.</p>`));
+  v.appendChild(el(`<p class="ph-sub" style="margin:-4px 0 14px"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i> Operational snapshot — <b>right now</b>, not a period. 🔴 = real lateness (in-flight work past its 11:59 PM IST deadline) or overloaded today. Past-due but <i>unstarted</i> tasks are shown as <b>Stale</b> (the old impossible-deadline pile) — reschedule them, they're not a performance miss. For period stats (June 1–15, last month) use the <b>Performance</b> tab.</p>`));
   v.appendChild(el(`<div class="kpis">
     ${kpi('alert-octagon','r',reds,'In the red')}
     ${kpi('alert-triangle','a',ambers,'At risk')}
@@ -1214,11 +1220,12 @@ async function renderWorkload(){
   // ── clean sorted TABLE — who's red in 2 seconds ─────────────────────────
   // one dominant signal per row: status pill + the single reason that matters.
   const REASON=r=>{
-    if(r.overdue>0)                   return {pill:'red',  label:'RED',     why:`${r.overdue} overdue`};
-    if(r.today>r.cap)                 return {pill:'red',  label:'RED',     why:`${r.today} due today · cap ${r.cap}`};
-    if(r.today>0&&r.today>=0.8*r.cap) return {pill:'amber',label:'AT RISK', why:`${r.today}/${r.cap} due today`};
-    if(r.open>r.cap)                  return {pill:'amber',label:'AT RISK', why:`${r.open} queued · ~${Math.ceil(r.open/r.cap)}d`};
-    return {pill:'green',label:'ON TRACK', why:'clear'};
+    if(r.overdue>0)                   return {pill:'red',  label:'BEHIND',    why:`${r.overdue} in-flight past deadline`};
+    if(r.today>r.cap)                 return {pill:'red',  label:'OVERLOADED',why:`${r.today} due today · cap ${r.cap}`};
+    if(r.today>0&&r.today>=0.8*r.cap) return {pill:'amber',label:'AT RISK',   why:`${r.today}/${r.cap} due today`};
+    if(r.stale>0)                     return {pill:'amber',label:'RESCHEDULE',why:`${r.stale} stale (unstarted, past-due)`};
+    if(r.open>r.cap)                  return {pill:'amber',label:'AT RISK',   why:`${r.open} queued · ~${Math.ceil(r.open/r.cap)}d`};
+    return {pill:'green',label:'CLEAR',    why:'on track'};
   };
   // productivity columns stay HIDDEN until real output exists (no empty "—" clutter)
   const hasOutput=rows.some(r=>r.vid7>0||(r.vidT!=null&&r.vidT!==''));
@@ -1253,16 +1260,19 @@ async function renderWorkload(){
   </style>`));}
   const tbl=el(`<table class="wtbl"><thead><tr>
     <th>Status</th><th>Editor</th>
-    <th class="num">Overdue</th><th class="num">Due today</th><th class="num">Open</th>
+    <th class="num" title="In-flight work past its deadline — real lateness">Overdue</th>
+    <th class="num" title="Unstarted tasks already past due — the impossible-deadline artifact; reschedule, not a miss">Stale</th>
+    <th class="num">Due today</th><th class="num">Open</th>
     <th class="num">Hrs 7d</th>${hasOutput?'<th class="num">Vids/hr</th>':''}<th class="num">Cap</th><th></th>
   </tr></thead><tbody></tbody></table>`);
-  const tb=tbl.querySelector('tbody'),colN=hasOutput?9:8;
+  const tb=tbl.querySelector('tbody'),colN=hasOutput?10:9;
   const cells=r=>{
     const s=REASON(r);
     const dueCls=r.today>r.cap?'bad':(r.today>0&&r.today>=0.8*r.cap?'warn':(r.today>0?'':'zero'));
     return `<td><span class="wpill2 ${s.pill}"><span class="dot"></span>${s.label}</span></td>
       <td><span class="wename2">${r.name||r.id}</span>${r.shared>0?`<span class="wbadge2" title="${r.shared} task(s) shared — counted for each editor, not double-penalized">${r.shared} shared</span>`:''}<div class="wwhy ${s.pill}">${s.why}</div></td>
       <td class="num"><span class="wn ${r.overdue>0?'bad':'zero'}">${r.overdue}</span></td>
+      <td class="num"><span class="wn ${r.stale>0?'warn':'zero'}" title="unstarted &amp; past-due — reschedule via Spread dates">${r.stale}</span></td>
       <td class="num"><span class="wn ${dueCls}">${r.today}</span></td>
       <td class="num"><span class="wn ${r.open?'':'zero'}">${r.open}</span></td>
       <td class="num"><span class="wn" title="${r.hrsT||0}h logged today">${r.hrs7||0}<small>h</small></span></td>
@@ -1304,6 +1314,169 @@ async function renderWorkload(){
   tbl.querySelectorAll('.wact2').forEach(btn=>btn.addEventListener('click',()=>{
     const ed=rows.find(r=>r.id===btn.dataset.eid); if(ed)_applySpread(ed,btn);
   }));
+  icons();
+}
+
+/* PERFORMANCE — admin/payroll period view. Date-range driven, IST-anchored. Spine = Jibble
+   hours (reliable); output/winners/bonus are placeholder columns until those signals flow. */
+let _perfTimer=null, _perfRange={preset:'month'};
+const BONUS_PER_WINNER=1000;  // ₹ INR per editor winner (admin/payroll only — not editor-facing)
+// All range bounds are IST 'YYYY-MM-DD' strings. editor_hours/editor_output.work_date are already
+// IST calendar days and completions.done_date is converted to its IST day before comparing, so the
+// viewer's local timezone (e.g. Alberta) NEVER shifts a month/payroll boundary.
+function _istDay(ms){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(new Date(ms===undefined?Date.now():ms));}
+function _istShiftDay(dayStr,n){return _istDay(new Date(dayStr+'T12:00:00+05:30').getTime()+n*864e5);} // noon-IST anchor (IST has no DST)
+function _prettyDay(d){return new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',day:'numeric',month:'short'}).format(new Date(d+'T12:00:00+05:30'));}
+function _inr(n){return '₹'+Math.round(n).toLocaleString('en-IN');}
+function _resolveRange(r){
+  const today=_istDay();
+  if(r.preset==='week'){
+    const wd=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kolkata',weekday:'short'}).format(new Date());
+    const off={Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[wd]??0;  // Monday-anchored IST week
+    return {start:_istShiftDay(today,-off),end:today,label:'This week'};
+  }
+  if(r.preset==='lastmonth'){const prevEnd=_istShiftDay(today.slice(0,8)+'01',-1);return {start:prevEnd.slice(0,8)+'01',end:prevEnd,label:'Last month'};}
+  if(r.preset==='custom'){let s=r.start||today,e=r.end||today; if(s>e){const t=s;s=e;e=t;} return {start:s,end:e,label:'Custom'};}
+  return {start:today.slice(0,8)+'01',end:today,label:'This month'};  // default = MTD
+}
+async function viewPerformance(){
+  if(_perfTimer){clearInterval(_perfTimer);_perfTimer=null;}
+  await renderPerformance();
+  // soft auto-refresh (current period includes today; data syncs ~10 min) — keep range, skip mid-edit
+  _perfTimer=setInterval(()=>{
+    if((location.hash||'').replace('#','')!=='performance'){clearInterval(_perfTimer);_perfTimer=null;return;}
+    if(/perfdate/.test((document.activeElement||{}).className||''))return;
+    renderPerformance();
+  },60000);
+}
+async function renderPerformance(){
+  const v=$('#view'), rg=_resolveRange(_perfRange);
+  const [caps,hours,output,comps]=(await Promise.all([
+    sb.from('editor_capacity').select('*'),
+    sb.from('editor_hours').select('*'),
+    sb.from('editor_output').select('*'),
+    sb.from('editor_completions').select('*')
+  ])).map(r=>r.data||[]);  // output/completions tables may be empty → graceful
+  v.innerHTML='';
+
+  if(!document.getElementById('perfcss')){document.head.appendChild(el(`<style id="perfcss">
+   .perfbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:2px 0 14px}
+   .perfpresets{display:inline-flex;gap:5px;background:#f1f5f9;padding:4px;border-radius:10px}
+   .perfpreset{padding:7px 14px;border:none;background:transparent;color:#475569;font-weight:700;font-size:12.5px;border-radius:7px;cursor:pointer}
+   .perfpreset:hover{background:#e2e8f0}.perfpreset.on{background:#4f46e5;color:#fff}
+   .perfcustom{display:inline-flex;align-items:center;gap:8px;color:var(--mut);font-size:13px}.perfcustom.hide{display:none}
+   .perfdate{padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;font-weight:600;color:#1f2937}
+   .perfrange{margin-left:auto;font-size:12.5px;color:var(--mut);display:inline-flex;align-items:center;gap:7px}.perfrange b{color:#1f2937}
+   .perfnote{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:11px 14px;font-size:12.5px;line-height:1.55;margin-bottom:14px}.perfnote b{font-weight:800}
+   .ptbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+   .ptbl thead th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:10px 14px;background:#f8fafc;border-bottom:1px solid var(--line);white-space:nowrap}
+   .ptbl thead th.num,.ptbl td.num{text-align:center}
+   .ptbl thead th.pend{color:#94a3b8}
+   .ptbl tbody td{padding:12px 14px;border-bottom:1px solid var(--line2);vertical-align:middle}
+   .ptbl tbody tr:last-child td{border-bottom:none}.ptbl tbody tr:hover{background:#f1f5f9}
+   .pname{font-weight:800;font-size:14.5px;color:#1f2937}
+   .pn{font-size:15px;font-weight:800;color:#1f2937}.pn small{font-size:10px;font-weight:600;color:var(--mut)}.pn.zero{color:#cbd5e1;font-weight:600}
+   .pfoot{font-size:11px;color:var(--mut);margin-top:11px;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+  </style>`));}
+
+  // ── aggregate strictly within [rg.start, rg.end] (IST string compare) ──
+  const inRange=d=>d>=rg.start&&d<=rg.end;
+  const HRS={},DAYS={},VID={},COMP={};
+  hours.forEach(h=>{if(h.work_date&&inRange(h.work_date)){const n=Number(h.hours||0);HRS[h.editor_id]=(HRS[h.editor_id]||0)+n;if(n>0)(DAYS[h.editor_id]||(DAYS[h.editor_id]=new Set())).add(h.work_date);}});
+  output.forEach(o=>{if(o.work_date&&inRange(o.work_date))VID[o.editor_id]=(VID[o.editor_id]||0)+Number(o.videos||0);});
+  comps.forEach(c=>{if(c.done_date){const d=_istDay(new Date(c.done_date).getTime());if(inRange(d))COMP[c.editor_id]=(COMP[c.editor_id]||0)+1;}});
+
+  const by={};
+  caps.forEach(c=>{by[c.editor_id]={id:c.editor_id,name:c.editor_name,cap:c.daily_capacity||20};});
+  Object.keys(HRS).forEach(id=>{if(!by[id])by[id]={id,name:id,cap:20};});  // hours but no roster row → still show
+  const winnersFlowing=false;  // flip on once Verdict-dropdown winners populate (then winners/bonus light up)
+  const rows=Object.values(by).map(e=>{
+    const hrs=Math.round((HRS[e.id]||0)*10)/10, days=DAYS[e.id]?DAYS[e.id].size:0;
+    const vids=VID[e.id]||0, comp=COMP[e.id]||0, avg=days>0?Math.round(hrs/days*10)/10:0;
+    const ratio=(hrs>0&&vids>0)?(vids/hrs).toFixed(2):null;
+    const winners=0, bonus=winners*BONUS_PER_WINNER;
+    return {...e,hrs,days,vids,comp,avg,ratio,winners,bonus};
+  });
+  rows.sort((a,b)=>b.hrs-a.hrs||b.comp-a.comp||String(a.name).localeCompare(String(b.name)));  // hours = the trusted spine
+
+  if(!caps.length && !rows.length){
+    v.appendChild(el(`<div class="panel" style="display:flex;justify-content:space-between;align-items:center"><div class="panel-h" style="margin:0"><i data-lucide="bar-chart-3"></i><h3>Editor Performance</h3></div><span style="font-size:12.5px;color:var(--mut)">${_istClock()}</span></div>`));
+    v.appendChild(emptyState('bar-chart-3','No editor data yet','Performance fills in once jibble_hours_sync (hours) and the workload sync (roster) have run.'));icons();return;}
+
+  const totHrs=Math.round(rows.reduce((s,r)=>s+r.hrs,0)*10)/10;
+  const totVid=rows.reduce((s,r)=>s+r.vids,0), totComp=rows.reduce((s,r)=>s+r.comp,0);
+  const activeEds=rows.filter(r=>r.hrs>0).length;
+  const spanDays=Math.round((new Date(rg.end+'T12:00:00+05:30')-new Date(rg.start+'T12:00:00+05:30'))/864e5)+1;
+  const hasOutput=rows.some(r=>r.vids>0);
+  const compLimited=rg.start<_istShiftDay(_istDay(),-39);  // completions retained only ~40 days
+
+  // header
+  v.appendChild(el(`<div class="panel" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div class="panel-h" style="margin:0"><i data-lucide="bar-chart-3"></i><h3>Performance · ${rg.label}</h3></div>
+    <span style="font-size:12.5px;color:var(--mut)"><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-3px"></i> ${_istClock()} · periods in IST</span></div>`));
+
+  // date-range picker bar
+  v.appendChild(el(`<div class="perfbar">
+    <div class="perfpresets">
+      <button class="perfpreset ${_perfRange.preset==='week'?'on':''}" data-preset="week">This week</button>
+      <button class="perfpreset ${_perfRange.preset==='month'?'on':''}" data-preset="month">This month</button>
+      <button class="perfpreset ${_perfRange.preset==='lastmonth'?'on':''}" data-preset="lastmonth">Last month</button>
+      <button class="perfpreset ${_perfRange.preset==='custom'?'on':''}" data-preset="custom">Custom</button>
+    </div>
+    <div class="perfcustom ${_perfRange.preset==='custom'?'':'hide'}">
+      <input type="date" class="perfdate" id="perfFrom" value="${rg.start}" max="${_istDay()}">
+      <span>→</span>
+      <input type="date" class="perfdate" id="perfTo" value="${rg.end}" max="${_istDay()}">
+    </div>
+    <div class="perfrange"><i data-lucide="calendar-range" style="width:15px;height:15px"></i> <b>${_prettyDay(rg.start)} – ${_prettyDay(rg.end)}</b> · ${spanDays}d · IST</div>
+  </div>`));
+
+  v.appendChild(el(`<div class="perfnote"><i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i> <b>Hours (Jibble) is the only fully-trusted signal today.</b> Videos, winners & bonus are shown as columns but are <b>pending data wiring</b> — they fill once editors' output flows (Drive sync) and winners get marked (Verdict dropdown). The view is intentionally thin until then. Every period is computed in <b>IST</b>, so month / payroll boundaries are correct no matter where you view from.</div>`));
+
+  v.appendChild(el(`<div class="kpis">
+    ${kpi('clock','i',totHrs+'h','Hours logged · period')}
+    ${kpi('calendar-days','g',spanDays,'Days in range')}
+    ${kpi('users','a',activeEds,'Editors with hours')}
+    ${kpi('video',hasOutput?'g':'i',hasOutput?totVid:'—','Videos · period')}</div>`));
+
+  const tbl=el(`<table class="ptbl"><thead><tr>
+    <th>Editor</th>
+    <th class="num">Hours</th><th class="num">Days</th><th class="num">Avg/day</th>
+    <th class="num ${hasOutput?'':'pend'}">Videos</th><th class="num ${hasOutput?'':'pend'}">Vids/hr</th>
+    <th class="num">Closes*</th>
+    <th class="num pend">Winners</th><th class="num pend">Bonus ₹</th>
+  </tr></thead><tbody></tbody></table>`);
+  const tb=tbl.querySelector('tbody');
+  tb.innerHTML=rows.map(r=>`<tr>
+    <td><span class="pname">${r.name||r.id}</span></td>
+    <td class="num"><span class="pn">${r.hrs||0}<small>h</small></span></td>
+    <td class="num"><span class="pn ${r.days?'':'zero'}">${r.days||'—'}</span></td>
+    <td class="num"><span class="pn ${r.avg?'':'zero'}">${r.avg||'—'}</span></td>
+    <td class="num"><span class="pn ${r.vids?'':'zero'}" ${r.vids?'':'title="pending Drive output sync"'}>${r.vids||'—'}</span></td>
+    <td class="num"><span class="pn ${r.ratio?'':'zero'}">${r.ratio||'—'}</span></td>
+    <td class="num"><span class="pn ${r.comp?'':'zero'}" title="ClickUp task-closes — partial, under-counts real output ~90%">${r.comp||'—'}</span></td>
+    <td class="num"><span class="pn zero" title="mark Verdict = winner in ClickUp to populate">${winnersFlowing?r.winners:'—'}</span></td>
+    <td class="num"><span class="pn zero" title="₹${BONUS_PER_WINNER}/winner · admin/payroll only">${winnersFlowing?_inr(r.bonus):'—'}</span></td>
+  </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;color:var(--mut);padding:20px">No editor data in this range.</td></tr>`;
+  v.appendChild(tbl);
+
+  v.appendChild(el(`<div class="pfoot">
+    <span><i data-lucide="clock" style="width:12px;height:12px;vertical-align:-2px"></i> Hours: Jibble (reliable)</span>
+    <span title="ClickUp task-closes capture only ~1–2/day — partial, NOT real video output.">ⓘ *Closes = ${totComp} ClickUp closes (partial signal)</span>
+    ${compLimited?'<span style="color:#b45309">⚠ Closes retained ~40 days — earlier part of this range is incomplete</span>':''}
+    <span title="Bonus = ₹${BONUS_PER_WINNER} per winner. Admin/payroll only — not editor-facing.">ⓘ Bonus ₹ &amp; Winners unlock once Verdict marking starts</span>
+  </div>`));
+
+  // wire the picker
+  v.querySelectorAll('.perfpreset').forEach(b=>b.addEventListener('click',()=>{
+    _perfRange={preset:b.dataset.preset};
+    if(b.dataset.preset==='custom'){const c=_resolveRange({preset:'month'});_perfRange={preset:'custom',start:c.start,end:c.end};}
+    renderPerformance();
+  }));
+  const fromI=v.querySelector('#perfFrom'), toI=v.querySelector('#perfTo');
+  const onCustom=()=>{_perfRange={preset:'custom',start:fromI.value||rg.start,end:toI.value||rg.end};renderPerformance();};
+  if(fromI)fromI.addEventListener('change',onCustom);
+  if(toI)toI.addEventListener('change',onCustom);
   icons();
 }
 
