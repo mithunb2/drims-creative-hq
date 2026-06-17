@@ -1122,10 +1122,13 @@ async function viewWorkload(){
 }
 async function renderWorkload(){
   const v=$('#view');
-  const [tasks,caps]=(await Promise.all([
+  const [tasks,caps,hours,comps,output]=(await Promise.all([
     sb.from('editor_tasks').select('*'),
-    sb.from('editor_capacity').select('*')
-  ])).map(r=>r.data||[]);
+    sb.from('editor_capacity').select('*'),
+    sb.from('editor_hours').select('*'),
+    sb.from('editor_completions').select('*'),
+    sb.from('editor_output').select('*')
+  ])).map(r=>r.data||[]);  // hours/comps/output tables may not exist yet → [] (graceful)
   v.innerHTML='';
 
   if(!document.getElementById('workloadcss')){document.head.appendChild(el(`<style id="workloadcss">
@@ -1145,6 +1148,13 @@ async function renderWorkload(){
   .wshared{font-size:10px;font-weight:700;color:#7c3aed;background:#7c3aed14;padding:2px 7px;border-radius:6px}
   .wapply{margin-top:11px;width:100%;padding:7px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;color:#1f2937;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
   .wapply:hover{background:#eef2f7}.wapply:disabled{opacity:.65;cursor:default}
+  .wprod{display:flex;gap:15px;margin-top:12px;padding-top:11px;border-top:1px dashed var(--line)}
+  .wp{text-align:center}.wp .n{font-size:18px;font-weight:800;line-height:1;color:#1f2937}
+  .wp .l{font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.3px;margin-top:4px;white-space:nowrap}
+  .wself{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11.5px;color:var(--mut);font-weight:600}
+  .wvidin{width:58px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;font-weight:700;text-align:center}
+  .wself-h{font-size:10px;opacity:.75;font-weight:500}
+  .wtracknote{margin-top:9px;font-size:10.5px;color:var(--mut);background:#f8fafc;border-radius:7px;padding:5px 8px}
   </style>`));}
 
   if(!caps.length && !tasks.length){
@@ -1154,6 +1164,16 @@ async function renderWorkload(){
   const by={};
   caps.forEach(c=>{by[c.editor_id]={id:c.editor_id,name:c.editor_name,cap:c.daily_capacity||20,tasks:[]};});
   tasks.forEach(t=>{(by[t.editor_id]||(by[t.editor_id]={id:t.editor_id,name:t.editor_name,cap:20,tasks:[]})).tasks.push(t);});
+
+  // ── videos-vs-hours accountability: hours (Jibble, reliable) + output (self-report→Drive) ──
+  // ClickUp completions are kept ONLY as a partial/diagnostic count, never as real volume.
+  const todayStr=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(new Date());
+  const last7=new Set(Array.from({length:7},(_,k)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(Date.now()-k*864e5)));
+  const HRS7={},HRST={},VID7={},VIDT={},COMP7={};
+  hours.forEach(h=>{const v=Number(h.hours||0);if(last7.has(h.work_date))HRS7[h.editor_id]=(HRS7[h.editor_id]||0)+v;if(h.work_date===todayStr)HRST[h.editor_id]=(HRST[h.editor_id]||0)+v;});
+  output.forEach(o=>{const v=Number(o.videos||0);if(last7.has(o.work_date))VID7[o.editor_id]=(VID7[o.editor_id]||0)+v;if(o.work_date===todayStr)VIDT[o.editor_id]=v;});
+  const wkAgo=Date.now()-7*864e5;
+  comps.forEach(c=>{if(c.done_date&&new Date(c.done_date).getTime()>=wkAgo)COMP7[c.editor_id]=(COMP7[c.editor_id]||0)+1;});
 
   const rows=Object.values(by).map(e=>{
     let inprog=0,overdue=0,today=0,nodue=0,shared=0;
@@ -1169,7 +1189,10 @@ async function renderWorkload(){
     // once dates are spread, not a today-pileup). red=overdue|today>cap · amber=near-today|backlog
     const tier=(overdue>0||today>cap)?'red':(today>=0.8*cap||open>cap)?'amber':'green';
     const redate=e.tasks.filter(t=>WL_UNSTARTED.has((t.status||'').trim().toLowerCase())).length;
-    return {...e,open,inprog,overdue,today,nodue,shared,tier,redate};
+    const hrs7=Math.round((HRS7[e.id]||0)*10)/10,hrsT=Math.round((HRST[e.id]||0)*10)/10;
+    const vid7=VID7[e.id]||0,vidT=VIDT[e.id],comp7=COMP7[e.id]||0;
+    const ratio=(hrs7>0&&vid7>0)?(vid7/hrs7).toFixed(2):null;  // videos per logged hour (7d)
+    return {...e,open,inprog,overdue,today,nodue,shared,tier,redate,hrs7,hrsT,vid7,vidT,comp7,ratio};
   });
   const ORD={red:0,amber:1,green:2};
   rows.sort((a,b)=>ORD[a.tier]-ORD[b.tier]||b.overdue-a.overdue||b.open-a.open);
@@ -1181,7 +1204,7 @@ async function renderWorkload(){
       <span><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-3px"></i> Now: <b style="color:#1f2937">${_istClock()}</b></span>
       <span><i data-lucide="flag" style="width:14px;height:14px;vertical-align:-3px"></i> Today's deadline: <b style="color:#1f2937">11:59 PM IST</b></span>
     </div></div>`));
-  v.appendChild(el(`<p class="ph-sub" style="margin:-4px 0 14px"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i> Sorted worst-first. A 🔴 outside work hours usually means a past 11:59 PM IST deadline lapsed — read it with the IST clock, not as live failure. Capacity is editable inline (persists).</p>`));
+  v.appendChild(el(`<p class="ph-sub" style="margin:-4px 0 14px"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i> Sorted worst-first; a 🔴 outside work hours usually means a past 11:59 PM IST deadline lapsed — read it with the IST clock. <b>Productivity = videos ÷ hours</b>: hours are from Jibble (reliable); videos are self-reported for now (auto file-counts from Drive later). ClickUp "tasks closed" is a partial diagnostic only — it captures ~1–2/day, not real output. Capacity editable inline.</p>`));
   v.appendChild(el(`<div class="kpis">
     ${kpi('alert-octagon','r',reds,'In the red')}
     ${kpi('alert-triangle','a',ambers,'At risk')}
@@ -1212,6 +1235,14 @@ async function renderWorkload(){
         ${r.shared>0?`<span class="wshared" title="Counted for each assignee — not double-penalized">${r.shared} shared</span>`:''}
         ${r.nodue>0?`<span style="font-size:10px">${r.nodue} no&nbsp;date</span>`:''}
       </div>
+      <div class="wprod">
+        <div class="wp"><div class="n">${r.hrsT||0}<span style="font-size:11px">h</span></div><div class="l">Hrs today</div></div>
+        <div class="wp"><div class="n">${r.hrs7||0}<span style="font-size:11px">h</span></div><div class="l">Hrs 7d</div></div>
+        <div class="wp"><div class="n">${r.vid7||'—'}</div><div class="l">Videos 7d</div></div>
+        <div class="wp"><div class="n" style="color:${r.ratio?'#1f2937':'#cbd5e1'}">${r.ratio||'—'}</div><div class="l">Vids/hr</div></div>
+      </div>
+      <div class="wself"><span>Videos done today:</span><input class="wvidin" type="number" min="0" max="200" value="${r.vidT??''}" placeholder="—" data-eid="${r.id}"><span class="wself-h">${r.hrsT?`${r.hrsT}h logged`:'no hours logged yet'}</span></div>
+      <div class="wtracknote"><i data-lucide="git-commit" style="width:11px;height:11px;vertical-align:-1px"></i> ClickUp tasks closed 7d: <b>${r.comp7}</b> <span style="opacity:.7">— partial, NOT full output</span></div>
       ${r.redate>0?`<button class="wapply" data-eid="${r.id}"><i data-lucide="calendar-clock" style="width:13px;height:13px;vertical-align:-2px"></i> Apply suggested dates (${r.redate})</button>`:''}
       </div>`));
   });
@@ -1227,6 +1258,16 @@ async function renderWorkload(){
   }));
   grid.querySelectorAll('.wapply').forEach(btn=>btn.addEventListener('click',()=>{
     const ed=rows.find(r=>r.id===btn.dataset.eid); if(ed)_applySpread(ed,btn);
+  }));
+  grid.querySelectorAll('.wvidin').forEach(inp=>inp.addEventListener('change',async()=>{
+    const eid=inp.dataset.eid,val=Math.max(0,Math.min(200,parseInt(inp.value)||0));
+    inp.disabled=true;
+    const {error}=await sb.from('editor_output').upsert(
+      {editor_id:eid,work_date:todayStr,videos:val,source:'self_report',
+       updated_by:(($('#userEmail')||{}).textContent||''),updated_at:new Date().toISOString()},
+      {onConflict:'editor_id,work_date'});
+    inp.disabled=false;
+    if(error)alert('Could not save: '+(error.message||error));else renderWorkload();
   }));
   icons();
 }
