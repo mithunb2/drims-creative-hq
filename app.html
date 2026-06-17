@@ -1351,12 +1351,17 @@ async function viewPerformance(){
 }
 async function renderPerformance(){
   const v=$('#view'), rg=_resolveRange(_perfRange);
-  const [caps,hours,output,comps]=(await Promise.all([
+  const [capsR,hoursR,outputR,compsR,winsR]=await Promise.all([
     sb.from('editor_capacity').select('*'),
     sb.from('editor_hours').select('*'),
     sb.from('editor_output').select('*'),
-    sb.from('editor_completions').select('*')
-  ])).map(r=>r.data||[]);  // output/completions tables may be empty → graceful
+    sb.from('editor_completions').select('*'),
+    sb.from('editor_winners').select('*')
+  ]);
+  const caps=capsR.data||[],hours=hoursR.data||[],output=outputR.data||[],comps=compsR.data||[],wins=winsR.data||[];
+  // winners "flowing" = the editor_winners table EXISTS (winner_sync live), even with 0 rows.
+  // If it 404s (SQL not applied yet) we keep the placeholder "—" instead of showing fake 0s.
+  const winnersFlowing=!winsR.error;
   v.innerHTML='';
 
   if(!document.getElementById('perfcss')){document.head.appendChild(el(`<style id="perfcss">
@@ -1381,21 +1386,17 @@ async function renderPerformance(){
 
   // ── aggregate strictly within [rg.start, rg.end] (IST string compare) ──
   const inRange=d=>d>=rg.start&&d<=rg.end;
-  const HRS={},DAYS={},VID={},COMP={};
+  const HRS={},DAYS={},VID={},COMP={},WIN={};
   hours.forEach(h=>{if(h.work_date&&inRange(h.work_date)){const n=Number(h.hours||0);HRS[h.editor_id]=(HRS[h.editor_id]||0)+n;if(n>0)(DAYS[h.editor_id]||(DAYS[h.editor_id]=new Set())).add(h.work_date);}});
   output.forEach(o=>{if(o.work_date&&inRange(o.work_date))VID[o.editor_id]=(VID[o.editor_id]||0)+Number(o.videos||0);});
   comps.forEach(c=>{if(c.done_date){const d=_istDay(new Date(c.done_date).getTime());if(inRange(d))COMP[c.editor_id]=(COMP[c.editor_id]||0)+1;}});
+  // winners: buyer sets Verdict={Winner,Scale} on the editor's Creative Pipeline task; winner_sync
+  // writes editor_winners with first_seen_at (IST). Range-bucket by that day (same as completions).
+  wins.forEach(w=>{if(w.first_seen_at){const d=_istDay(new Date(w.first_seen_at).getTime());if(inRange(d))WIN[w.editor_id]=(WIN[w.editor_id]||0)+1;}});
 
   const by={};
   caps.forEach(c=>{by[c.editor_id]={id:c.editor_id,name:c.editor_name,cap:c.daily_capacity||20};});
   Object.keys(HRS).forEach(id=>{if(!by[id])by[id]={id,name:id,cap:20};});  // hours but no roster row → still show
-  // Winners have NO source today: Verdict field is being deleted (0% filled), status/verdict_watcher
-  // is unused (Production empty, 0 winners ever marked). Real signal is in the buyer's head from Meta,
-  // recorded nowhere. A lightweight intake (channel TBD — pending buyer answer) is the planned source.
-  // To light this up later: build a WIN[editor_id] map (range-summed, same shape as HRS/VID) and flip
-  // winnersFlowing=true. Do NOT wire to Verdict or status — both empty. Nothing else here changes.
-  const winnersFlowing=false;
-  const WIN={};  // ← future intake populates this (per editor_id, winners in [rg.start, rg.end])
   const rows=Object.values(by).map(e=>{
     const hrs=Math.round((HRS[e.id]||0)*10)/10, days=DAYS[e.id]?DAYS[e.id].size:0;
     const vids=VID[e.id]||0, comp=COMP[e.id]||0, avg=days>0?Math.round(hrs/days*10)/10:0;
@@ -1437,7 +1438,7 @@ async function renderPerformance(){
     <div class="perfrange"><i data-lucide="calendar-range" style="width:15px;height:15px"></i> <b>${_prettyDay(rg.start)} – ${_prettyDay(rg.end)}</b> · ${spanDays}d · IST</div>
   </div>`));
 
-  v.appendChild(el(`<div class="perfnote"><i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i> <b>Hours (Jibble) is the only fully-trusted signal today.</b> Videos, winners & bonus are shown as columns but are <b>pending data wiring</b> — they fill once editors' output flows (Drive sync) and a winner intake exists (channel TBD — pending buyer). The view is intentionally thin until then. Every period is computed in <b>IST</b>, so month / payroll boundaries are correct no matter where you view from.</div>`));
+  v.appendChild(el(`<div class="perfnote"><i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i> <b>Hours</b> (Jibble) and <b>Winners</b> (${winnersFlowing?'live — buyer\'s Verdict = Winner/Scale on the editor\'s task':'pending — apply editor_winners.sql + winner_sync'}) drive this view. <b>Videos / Vids·hr</b> are still ${hasOutput?'live':'pending the Drive output sync'}. Every period is computed in <b>IST</b>, so month / payroll boundaries are correct no matter where you view from.</div>`));
 
   v.appendChild(el(`<div class="kpis">
     ${kpi('clock','i',totHrs+'h','Hours logged · period')}
@@ -1450,7 +1451,7 @@ async function renderPerformance(){
     <th class="num">Hours</th><th class="num">Days</th><th class="num">Avg/day</th>
     <th class="num ${hasOutput?'':'pend'}">Videos</th><th class="num ${hasOutput?'':'pend'}">Vids/hr</th>
     <th class="num">Closes*</th>
-    <th class="num pend">Winners</th><th class="num pend">Bonus ₹</th>
+    <th class="num ${winnersFlowing?'':'pend'}">Winners</th><th class="num ${winnersFlowing?'':'pend'}">Bonus ₹</th>
   </tr></thead><tbody></tbody></table>`);
   const tb=tbl.querySelector('tbody');
   tb.innerHTML=rows.map(r=>`<tr>
@@ -1461,8 +1462,8 @@ async function renderPerformance(){
     <td class="num"><span class="pn ${r.vids?'':'zero'}" ${r.vids?'':'title="pending Drive output sync"'}>${r.vids||'—'}</span></td>
     <td class="num"><span class="pn ${r.ratio?'':'zero'}">${r.ratio||'—'}</span></td>
     <td class="num"><span class="pn ${r.comp?'':'zero'}" title="ClickUp task-closes — partial, under-counts real output ~90%">${r.comp||'—'}</span></td>
-    <td class="num"><span class="pn zero" title="winners — pending a dedicated intake (channel TBD); not wired to any field yet">${winnersFlowing?r.winners:'—'}</span></td>
-    <td class="num"><span class="pn zero" title="₹${BONUS_PER_WINNER}/winner · admin/payroll only · fills once a winner intake exists">${winnersFlowing?_inr(r.bonus):'—'}</span></td>
+    <td class="num"><span class="pn ${winnersFlowing&&r.winners?'':'zero'}" title="${winnersFlowing?'buyer marked Verdict = Winner/Scale on this editor\'s Creative Pipeline task(s)':'pending — apply editor_winners.sql + run winner_sync'}">${winnersFlowing?r.winners:'—'}</span></td>
+    <td class="num"><span class="pn ${winnersFlowing&&r.bonus?'':'zero'}" title="₹${BONUS_PER_WINNER}/winner (Winner+Scale) · admin/payroll only — not editor-facing">${winnersFlowing?_inr(r.bonus):'—'}</span></td>
   </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;color:var(--mut);padding:20px">No editor data in this range.</td></tr>`;
   v.appendChild(tbl);
 
@@ -1470,7 +1471,9 @@ async function renderPerformance(){
     <span><i data-lucide="clock" style="width:12px;height:12px;vertical-align:-2px"></i> Hours: Jibble (reliable)</span>
     <span title="ClickUp task-closes capture only ~1–2/day — partial, NOT real video output.">ⓘ *Closes = ${totComp} ClickUp closes (partial signal)</span>
     ${compLimited?'<span style="color:#b45309">⚠ Closes retained ~40 days — earlier part of this range is incomplete</span>':''}
-    <span title="Bonus = ₹${BONUS_PER_WINNER} per winner. Admin/payroll only — not editor-facing.">ⓘ Bonus ₹ &amp; Winners unlock once a winner intake exists (TBD — pending buyer)</span>
+    ${winnersFlowing
+      ?`<span title="A winner = Verdict Winner or Scale on the editor's Creative Pipeline task; bonus = ₹${BONUS_PER_WINNER} each. Admin/payroll only — not editor-facing.">🏆 Winners: buyer's Verdict (Winner/Scale) · ₹${BONUS_PER_WINNER}/win</span>`
+      :`<span title="Apply creative_hq_editor_winners.sql in Supabase + schedule winner_sync.">ⓘ Bonus ₹ &amp; Winners unlock once editor_winners.sql is applied + winner_sync runs</span>`}
   </div>`));
 
   // wire the picker
