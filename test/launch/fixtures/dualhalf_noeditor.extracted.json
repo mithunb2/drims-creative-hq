@@ -1,0 +1,107 @@
+{
+  "paragraphs": [
+    "LAUNCH DOC",
+    "AD 026 - V1.mp4",
+    "SCRIPT:",
+    "Hook (0-3s): on-camera, \"line 1 that stops the scroll\".",
+    "Visual direction: show the product at second 1. B-roll of pages.",
+    "VO: read entry 1 in a warm, plain voice. 30 seconds.",
+    "NAME: DA | 7-14-2026 | ACQ | BMS POV-UGC | Row 26 | Round-1 | f:UGC | af:CreatorPOV+BookReveal | m:mechanism-1 | h:hook-1 | p:Bible-Made-Simple-71p | len:30sec | o:Free+Fee | lp:pdp | a:UGC | V1 | Shop Now",
+    "AD COPY:",
+    "POV: this is ad copy line one for entry 1. do not regenerate me.",
+    "second line of the verbatim ad copy for entry 1.",
+    "Testing: hook-1-vs-control",
+    "AD 027 - V2.mp4",
+    "SCRIPT:",
+    "Hook (0-3s): on-camera, \"line 2 that stops the scroll\".",
+    "Visual direction: show the product at second 2. B-roll of pages.",
+    "VO: read entry 2 in a warm, plain voice. 30 seconds.",
+    "NAME: DA | 7-14-2026 | ACQ | BMS POV-UGC | Row 27 | Round-1 | f:UGC | af:CreatorPOV+BookReveal | m:mechanism-2 | h:hook-2 | p:Bible-Made-Simple-71p | len:30sec | o:Free+Fee | lp:pdp | a:UGC | V1 | Shop Now",
+    "AD COPY:",
+    "POV: this is ad copy line one for entry 2. do not regenerate me.",
+    "second line of the verbatim ad copy for entry 2.",
+    "Testing: hook-2-vs-control"
+  ],
+  "tables": [
+    [
+      [
+        "Field",
+        "Value"
+      ],
+      [
+        "Store",
+        "Bible Made Simple"
+      ],
+      [
+        "Ad Account ID",
+        "act_1234567890"
+      ],
+      [
+        "Budget Level",
+        "ad_set"
+      ],
+      [
+        "Budget Type",
+        "daily"
+      ],
+      [
+        "Budget Amount (USD)",
+        "15.00"
+      ],
+      [
+        "Launch Spend Cap (USD)",
+        "945.00"
+      ],
+      [
+        "Run Length (days)",
+        "21"
+      ],
+      [
+        "Funnel Stage",
+        "ACQ"
+      ],
+      [
+        "Offer",
+        "Free+Fee"
+      ],
+      [
+        "Landing Page",
+        "https://peacefulpath.store/"
+      ],
+      [
+        "Custom Conversion",
+        "AOV >= $5"
+      ],
+      [
+        "Editor",
+        ""
+      ]
+    ],
+    [
+      [
+        "Ad #",
+        "Ad Set",
+        "Video File",
+        "Angle (cluster)",
+        "Length",
+        "Hook"
+      ],
+      [
+        "026",
+        "AS1 Cluster-1",
+        "V1.mp4",
+        "angle-1",
+        "30",
+        "hook line 1"
+      ],
+      [
+        "027",
+        "AS2 Cluster-2",
+        "V2.mp4",
+        "angle-2",
+        "30",
+        "hook line 2"
+      ]
+    ]
+  ]
+}

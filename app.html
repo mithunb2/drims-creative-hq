@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="/config.js"></script>
 <style>
 :root{
@@ -340,6 +341,8 @@ table.tbl tbody tr:hover{background:var(--bg)}
     <button data-tab="team"><i data-lucide="users"></i>Team</button>
     <button data-tab="workload"><i data-lucide="gauge"></i>Live</button>
     <button data-tab="performance"><i data-lucide="bar-chart-3"></i>Performance</button>
+    <button data-tab="split"><i data-lucide="split"></i>Doc → Tasks</button>
+    <button data-tab="launch"><i data-lucide="rocket"></i>Add Automation</button>
   </nav>
   <main>
     <div class="stalebar" id="staleBar"><i data-lucide="alert-triangle"></i><span id="staleMsg"></span></div>
@@ -418,13 +421,316 @@ const adsForStore=id=>DATA.ads.filter(a=>a.product_id===id);
 const countLane=(ads,l)=>ads.filter(a=>laneOf(a)===l).length;
 const uniq=a=>[...new Set(a.filter(Boolean))];
 
+/* ── Add Automation — Meta Launch (TOKENLESS preview; no Meta connection) ───────── */
+let _lstate={plan:null,fileName:'',acks:{}};
+const _esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const W_NS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const _kids=(node,ln)=>Array.from(node.children).filter(c=>c.localName===ln&&c.namespaceURI===W_NS);
+const _wtext=node=>Array.from(node.getElementsByTagNameNS(W_NS,'t')).map(t=>t.textContent||'').join('');
+
+/* Browser-side .docx -> {paragraphs, tables}. Faithful to the Python extract_docx (direct-child
+   tr/tc/p; recursive w:t). All parse/validate/budget/gate logic runs SERVER-side on this output. */
+async function _lextract(file){
+  const zip=await JSZip.loadAsync(file);
+  const entry=zip.file('word/document.xml');
+  if(!entry) throw new Error('not a Word .docx (no word/document.xml)');
+  const xml=await entry.async('string');
+  const doc=new DOMParser().parseFromString(xml,'application/xml');
+  if(doc.getElementsByTagName('parsererror').length) throw new Error('document.xml is not valid XML');
+  const body=doc.getElementsByTagNameNS(W_NS,'body')[0];
+  if(!body) throw new Error('no document body');
+  const paragraphs=[],tables=[];
+  for(const el of Array.from(body.children)){
+    if(el.localName==='p'&&el.namespaceURI===W_NS){
+      const t=_wtext(el).trim(); if(t) paragraphs.push(t);
+    } else if(el.localName==='tbl'&&el.namespaceURI===W_NS){
+      const rows=[];
+      for(const tr of _kids(el,'tr')){
+        const cells=_kids(tr,'tc').map(tc=>_kids(tc,'p').map(p=>_wtext(p)).join(' ').trim());
+        rows.push(cells);
+      }
+      tables.push(rows);
+    }
+  }
+  return {paragraphs,tables};
+}
+
+async function _lhandleFile(file){
+  const errB=$('#lErr'),nameB=$('#lFileName');
+  errB.style.display='none';
+  if(!/\.docx$/i.test(file.name||'')){errB.textContent='Please upload a .docx launch doc.';errB.style.display='block';return;}
+  nameB.textContent='Parsing '+file.name+' …';
+  try{
+    const extracted=await _lextract(file);
+    const r=await fetch('/api/launch/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(extracted)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||('parse failed (HTTP '+r.status+')'));
+    _lstate.plan=j.plan; _lstate.fileName=file.name; _lstate.acks={}; _lstate.extracted=extracted;
+    nameB.textContent=file.name+' — parsed ✓';
+    _lrender(j.plan);
+  }catch(err){
+    errB.textContent='Could not parse: '+(err.message||err); errB.style.display='block';
+    nameB.textContent=''; _lstate.plan=null; $('#lBody').innerHTML='';
+  }
+}
+
+function _lmoney(n){return n==null?'—':'$'+Number(n).toFixed(2);}
+
+function _lrender(plan){
+  const b=plan.budget, lp=plan.launch_permission, gate=plan.asl_gate, rec=plan.store_record, cfg=plan.config||{};
+  const target = rec&&plan.account_id
+      ? `${_esc(plan.store)} → ${_esc(rec.slug)} → <code>${_esc(plan.account_id)}</code> in BM ${_esc(rec.business_id)} (${_esc(rec.business_name||'')})`
+      : rec ? `${_esc(plan.store)} → ${_esc(rec.slug)} → <span style="color:#e5484d">no ad account mapped</span>`
+      : `${_esc(plan.store||'(none)')} → <span style="color:#e5484d">UNRESOLVED (not in registry)</span>`;
+  const setRows=Object.keys(plan.ad_sets).sort().map(s=>{
+    const ids=plan.ad_sets[s], active=ids.filter(i=>plan.week1_active.includes(i));
+    return `<tr><td><b>${_esc(s)}</b></td><td>${ids.map(_esc).join(', ')}</td><td>${active.length?active.map(_esc).join(', '):'<span class="muted">—</span>'}</td></tr>`;
+  }).join('');
+  const adRows=plan.ads.map(a=>`<tr>
+      <td>${_esc(a.ad_number)}</td><td>${_esc(a.ad_set)}</td>
+      <td>${a.launch_week===1?'<span style="color:#30a46c;font-weight:600">week-1</span>':'<span class="muted">staged</span>'}</td>
+      <td class="muted" style="font-size:12px">${_esc(a.video_file)}</td>
+      <td class="muted" style="font-size:12px">${_esc((a.hook||'').slice(0,60))}</td></tr>`).join('');
+
+  // ASL panel — tokenless is ALWAYS unknown -> HARD BLOCK. Never a hand-typed number.
+  const stateChip=st=>{const on=gate.state===st;const col={none:'#e5484d',tight:'#f5a623',room:'#30a46c',unknown:'#8b8d98'}[st];
+    return `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;margin-right:6px;border:1px solid ${col};color:${on?'#fff':col};background:${on?col:'transparent'}">${st.toUpperCase()}</span>`;};
+  const aslPanel=`
+    <div class="panel">
+      <h3 style="margin:0 0 8px">Account Spending Limit (Meta-enforced Layer-0)</h3>
+      <div style="margin-bottom:10px">${['none','tight','room','unknown'].map(stateChip).join('')}</div>
+      <div style="background:#2a1113;border:1px solid #e5484d;border-radius:8px;padding:12px;color:#ffb3b3">
+        <b>⛔ HARD BLOCK — ASL UNKNOWN.</b> The real spending limit can only be read from a
+        <b>live Meta connection</b>, which is gated behind the security runbook. Fail-closed: with no
+        verified ASL, launch is disabled. A no-ASL account is a permanent HARD BLOCK (Meta would
+        enforce no ceiling). This value is <b>never hand-entered</b> — it is the real Meta number or nothing.
+      </div>
+      <div class="muted" style="margin-top:8px;font-size:13px">
+        Launch Spend Cap the doc commits: <b>${_lmoney(b?b.launch_spend_cap:null)}</b> — a live read must show
+        headroom ≥ this before the money-gate opens.
+      </div>
+    </div>`;
+
+  const flagRows=plan.flags.length?plan.flags.map((f,i)=>{
+    const crit=f.severity==='CRITICAL', blocks=f.blocks_activation;
+    return `<label style="display:flex;gap:8px;align-items:flex-start;padding:8px;border-bottom:1px solid #ffffff14">
+      <input type="checkbox" class="lAck" data-i="${i}" ${_lstate.acks[i]?'checked':''}>
+      <span>
+        <span style="font-weight:700;color:${crit?'#e5484d':'#f5a623'}">${crit?'‼ CRITICAL':'flag'}</span>
+        · AD ${_esc(f.ad_number)}
+        ${blocks?'<span style="color:#e5484d;font-weight:600"> — BLOCKS ACTIVATION (week-1)</span>':(f.in_week1?' <span class="muted">(week-1)</span>':(f.ad_number!=='ALL'?' <span class="muted">(staged)</span>':''))}
+        <div class="muted" style="font-size:12px;margin-top:2px">${_esc((f.text||'').slice(0,140))}</div>
+      </span></label>`;}).join(''):'<div class="muted" style="padding:8px">No QA flags in this doc.</div>';
+
+  const blockersHtml=plan.blockers.length
+    ?`<div class="panel"><h3 style="margin:0 0 6px;color:#e5484d">Blockers (launch disabled until resolved)</h3>${plan.blockers.map(x=>`<div style="color:#ffb3b3;font-size:13px;padding:2px 0">✕ ${_esc(x)}</div>`).join('')}</div>`
+    :'<div class="panel"><span style="color:#30a46c">✓ No structural blockers — plan is clean.</span></div>';
+  const warnHtml=plan.warnings.length
+    ?`<div class="panel"><h3 style="margin:0 0 6px;color:#f5a623">Warnings</h3>${plan.warnings.map(x=>`<div style="color:#ffd9a0;font-size:13px;padding:2px 0">! ${_esc(x)}</div>`).join('')}</div>`:'';
+
+  $('#lBody').innerHTML=`
+    <div class="panel">
+      <h3 style="margin:0 0 8px">Target account <span class="muted" style="font-weight:400;font-size:12px">(100% registry-resolved)</span></h3>
+      <div style="font-size:14px">${target}</div>
+      <div class="muted" style="margin-top:6px;font-size:13px">landing ${_esc(cfg['Landing Page']||'(doc: none)')} · conversion ${_esc(cfg['Custom Conversion']||'(doc: none)')}</div>
+      <div style="margin-top:6px;font-size:13px">Campaign: <b>${_esc(plan.campaign.label||'')}</b> · ${_esc(plan.campaign.funnel_stage||'')} · ${_esc(plan.campaign.objective)}</div>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 8px">${plan.ads.length} ads across ${Object.keys(plan.ad_sets).length} ad sets · ${plan.week1_active.length} week-1 live, ${plan.ads.length-plan.week1_active.length} staged</h3>
+      <table class="tbl" style="width:100%;font-size:13px"><thead><tr><th>Ad set</th><th>Ads</th><th>Week-1 active</th></tr></thead><tbody>${setRows}</tbody></table>
+      <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;font-size:13px">per-ad detail</summary>
+        <table class="tbl" style="width:100%;font-size:13px;margin-top:6px"><thead><tr><th>Ad</th><th>Set</th><th>Launch</th><th>Video</th><th>Hook</th></tr></thead><tbody>${adRows}</tbody></table>
+      </details>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 8px">Budget <span class="muted" style="font-weight:400;font-size:12px">(read from the doc — nothing hardcoded)</span></h3>
+      ${b?`<div style="font-size:14px">${_esc(b.arithmetic)}</div>
+      <div style="display:flex;gap:18px;margin-top:8px;flex-wrap:wrap">
+        <div>daily <b>${_lmoney(b.daily_total)}</b></div><div>weekly <b>${_lmoney(b.weekly_total)}</b></div>
+        <div>run(~${b.run_days}d) <b>${_lmoney(b.run_total_estimate)}</b></div>
+        <div>Launch Spend Cap <b>${_lmoney(b.launch_spend_cap)}</b> <span class="muted">→ campaign spend_cap (Layer-1)</span></div>
+      </div>`:'<div style="color:#e5484d">Budget not computed — see blockers.</div>'}
+    </div>
+    ${aslPanel}
+    <div class="panel">
+      <h3 style="margin:0 0 8px">QA-flag checklist <span class="muted" style="font-weight:400;font-size:12px">(must be cleared before ACTIVATE)</span></h3>
+      ${flagRows}
+    </div>
+    ${warnHtml}
+    ${blockersHtml}
+    <div class="panel" style="border:1px solid ${lp.allowed?'#30a46c':'#e5484d'}">
+      <button id="lSubmit" ${lp.allowed?'':'disabled'} style="padding:10px 18px;border-radius:8px;border:none;font-weight:700;cursor:${lp.allowed?'pointer':'not-allowed'};background:${lp.allowed?'#30a46c':'#3a3a3a'};color:${lp.allowed?'#fff':'#888'}">
+        🚀 Submit launch
+      </button>
+      <span style="margin-left:12px;color:${lp.allowed?'#30a46c':'#e5484d'};font-size:13px">${lp.allowed?'gates clear':'DISABLED — '+_esc(lp.reason)}</span>
+      <div class="muted" style="margin-top:8px;font-size:12px">
+        Even if every doc-side gate were clear, Submit stays disabled until the security runbook is cleared and
+        <code>META_LAUNCH_ALLOW_LIVE_WRITES=1</code> is set. This build has <b>no Meta token and no live connection</b>.
+      </div>
+    </div>`;
+  document.querySelectorAll('.lAck').forEach(c=>c.addEventListener('change',e=>{_lstate.acks[e.target.dataset.i]=e.target.checked;}));
+  const sb=$('#lSubmit'); if(sb) sb.addEventListener('click',_lsubmit);
+  icons();
+}
+
+/* Submit hits the double-gated endpoint. Tokenless it ALWAYS returns blocked/ pending — no Meta contact. */
+async function _lsubmit(){
+  try{
+    // Re-post the SAME extracted doc; the server re-parses authoritatively and applies both gates.
+    const payload=_lstate.extracted||{paragraphs:[],tables:[]};
+    const r=await fetch('/api/launch/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const j=await r.json().catch(()=>({}));
+    alert('Launch endpoint ('+r.status+'): '+(j.status||'')+'\n'+(j.reason||''));
+  }catch(err){ alert('submit blocked: '+(err.message||err)); }
+}
+
+function viewLaunch(){
+  const v=$('#view'); v.innerHTML='';
+  v.appendChild(el(`<div class="panel">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i data-lucide="rocket"></i><h2 style="margin:0">Add Automation — Meta Launch</h2></div>
+    <div class="muted" style="font-size:13px;margin-bottom:14px">Upload a launch doc (.docx) → parse → budget + safety preview. <b>Tokenless preview only</b>: no Meta connection, launch disabled behind the security gate.</div>
+    <div id="lDrop" style="border:2px dashed #ffffff33;border-radius:12px;padding:26px;text-align:center;cursor:pointer">
+      <input type="file" id="lFile" accept=".docx" style="display:none">
+      <i data-lucide="file-up"></i>
+      <div style="margin-top:6px"><b>Drop a .docx launch doc</b> or <a href="#" id="lBrowse">browse</a></div>
+      <div class="muted" id="lFileName" style="margin-top:6px;font-size:13px"></div>
+    </div>
+    <div id="lErr" style="display:none;margin-top:10px;color:#ffb3b3;background:#2a1113;border:1px solid #e5484d;border-radius:8px;padding:10px;font-size:13px"></div>
+  </div>
+  <div id="lBody"></div>`));
+  const fi=$('#lFile'),drop=$('#lDrop');
+  $('#lBrowse').addEventListener('click',e=>{e.preventDefault();fi.click();});
+  drop.addEventListener('click',e=>{if(e.target.id!=='lBrowse')fi.click();});
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.borderColor='#5b8def';});
+  drop.addEventListener('dragleave',()=>{drop.style.borderColor='#ffffff33';});
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.style.borderColor='#ffffff33';if(e.dataTransfer.files[0])_lhandleFile(e.dataTransfer.files[0]);});
+  fi.addEventListener('change',e=>{if(e.target.files[0])_lhandleFile(e.target.files[0]);});
+  icons();
+  if(_lstate.plan) _lrender(_lstate.plan);
+}
+
+/* ── Doc → Tasks — dual-half split intake (Phase 1, tokenless; writes a split-job to Supabase) ──── */
+let _sstate={split:null,fileName:''};
+
+async function _shandleFile(file){
+  const errB=$('#sErr'),nameB=$('#sFileName');
+  errB.style.display='none';
+  if(!/\.docx$/i.test(file.name||'')){errB.textContent='Please upload a .docx doc.';errB.style.display='block';return;}
+  nameB.textContent='Parsing '+file.name+' …';
+  try{
+    const extracted=await _lextract(file);           // reuse the proven client-side extractor
+    extracted.filename=file.name;
+    // No ClickUp token in the browser: editor resolution is SERVER-SIDE (Vercel env) or deferred to intake.
+    const r=await fetch('/api/launch/split',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(extracted)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||('split failed (HTTP '+r.status+')'));
+    _sstate.split=j.split; _sstate.fileName=file.name;
+    nameB.textContent=file.name+' — '+j.split.count+' entr'+(j.split.count===1?'y':'ies')+' parsed ✓';
+    _srender(j.split);
+  }catch(err){
+    errB.textContent='Could not parse: '+(err.message||err); errB.style.display='block';
+    nameB.textContent=''; _sstate.split=null; $('#sBody').innerHTML='';
+  }
+}
+
+function _srender(split){
+  const rec=split.store_record, ed=split.editor||{};
+  const edLine = ed.resolved
+    ? `<span style="color:#30a46c">✓ ${_esc(split.editor_name)} → ${_esc(ed.matched_username||'')} (${_esc(ed.assignee_id)})</span>`
+    : ed.deferred
+    ? `<span style="color:#f5a623">⏳ ${_esc(split.editor_name||'(none named)')} — ${_esc(ed.reason||'resolved at intake')}</span>`
+    : `<span style="color:#e5484d">✕ ${_esc(split.editor_name||'(none named)')} — ${_esc(ed.reason||'not resolved')}</span>`;
+  const target = rec&&split.account_id
+      ? `${_esc(split.store)} → ${_esc(rec.slug)} → <code>${_esc(split.account_id)}</code>`
+      : `${_esc(split.store||'(none)')} → <span style="color:#e5484d">unresolved / no account</span>`;
+  const entries=split.entries.map(e=>`
+    <div class="panel" style="border-left:3px solid #5b8def">
+      <div style="font-weight:700">AD ${_esc(e.ad_number)} · <code>${_esc(e.video_file)}</code> · ad set <b>${_esc(e.launch_half.ad_set||'—')}</b> · Testing: <i>${_esc(e.test_label||'—')}</i></div>
+      <details style="margin-top:6px"><summary style="cursor:pointer;color:#8b8d98;font-size:13px">SCRIPT (editor half — goes to the task)</summary>
+        <pre style="white-space:pre-wrap;font-size:12px;margin:6px 0;background:#00000022;padding:8px;border-radius:6px">${_esc(e.script)}</pre></details>
+      <details><summary style="cursor:pointer;color:#8b8d98;font-size:13px">AD COPY (launch half — HELD, reused not regenerated)</summary>
+        <pre style="white-space:pre-wrap;font-size:12px;margin:6px 0;background:#00000022;padding:8px;border-radius:6px">${_esc(e.launch_half.ad_copy)}</pre></details>
+    </div>`).join('');
+  const blk=split.blockers.length
+    ?`<div class="panel"><h3 style="margin:0 0 6px;color:#e5484d">Blockers (fix before commit)</h3>${split.blockers.map(x=>`<div style="color:#ffb3b3;font-size:13px">✕ ${_esc(x)}</div>`).join('')}</div>`
+    :'<div class="panel"><span style="color:#30a46c">✓ No blockers — ready to commit.</span></div>';
+  const warn=split.warnings.length?`<div class="panel"><h3 style="margin:0 0 6px;color:#f5a623">Warnings</h3>${split.warnings.map(x=>`<div style="color:#ffd9a0;font-size:13px">! ${_esc(x)}</div>`).join('')}</div>`:'';
+  const canCommit=split.blockers.length===0;
+  $('#sBody').innerHTML=`
+    <div class="panel">
+      <h3 style="margin:0 0 8px">Split preview — <b>${split.count}</b> task${split.count===1?'':'s'} → one editor</h3>
+      <div style="font-size:14px">Target: ${target}</div>
+      <div style="margin-top:4px">Editor (from doc): ${edLine}</div>
+      <div class="muted" style="margin-top:4px;font-size:13px">All ${split.count} tasks assign to this one editor. Each gets ITS script as the brief; its launch data is held for the Drive-link → Production step.</div>
+    </div>
+    ${blk}${warn}
+    ${entries}
+    <div class="panel" style="border:1px solid ${canCommit?'#30a46c':'#e5484d'}">
+      <button id="sCommit" ${canCommit?'':'disabled'} style="padding:10px 18px;border-radius:8px;border:none;font-weight:700;cursor:${canCommit?'pointer':'not-allowed'};background:${canCommit?'#30a46c':'#3a3a3a'};color:${canCommit?'#fff':'#888'}">Commit split job → queue ${split.count} task${split.count===1?'':'s'}</button>
+      <span style="margin-left:12px;font-size:13px;color:${canCommit?'#30a46c':'#e5484d'}">${canCommit?'writes launch_jobs + launch_holds; the intake worker fans out the tasks':'resolve blockers first'}</span>
+      <div id="sResult" style="margin-top:10px"></div>
+    </div>`;
+  const cb=$('#sCommit'); if(cb) cb.addEventListener('click',()=>_scommit(split));
+  icons();
+}
+
+async function _scommit(split){
+  const btn=$('#sCommit'), out=$('#sResult'); btn.disabled=true; btn.textContent='Committing…';
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    const buyer = session&&session.user ? session.user.email : null;
+    const { data:job, error:je } = await sb.from('launch_jobs').insert({
+      store_slug: (split.store_record&&split.store_record.slug)||null,
+      store_name: split.store||null, account_id: split.account_id||null, buyer,
+      editor_name: split.editor_name, editor_assignee_id: split.editor_assignee_id||null,
+      campaign_config: split.campaign_config||{}, entry_count: split.count,
+      source_filename: split.source_filename||_sstate.fileName||null, status:'pending'
+    }).select('id').single();
+    if(je) throw new Error('job insert: '+je.message);
+    const holds=split.entries.map(e=>({job_id:job.id, entry_index:e.entry_index, ad_number:e.ad_number,
+      video_file:e.video_file, test_label:e.test_label, script_half:e.script, launch_half:e.launch_half}));
+    const { error:he } = await sb.from('launch_holds').insert(holds);
+    if(he) throw new Error('holds insert: '+he.message);
+    out.innerHTML='<div style="color:#30a46c">✓ Committed job '+job.id+' — '+split.count+' task(s) queued. The intake worker will create them on the Mac Mini.</div>';
+    btn.textContent='Committed ✓';
+  }catch(err){
+    out.innerHTML='<div style="color:#e5484d">Commit failed: '+_esc(err.message||err)+'</div>';
+    btn.disabled=false; btn.textContent='Commit split job';
+  }
+}
+
+function viewSplit(){
+  const v=$('#view'); v.innerHTML='';
+  v.appendChild(el(`<div class="panel">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i data-lucide="split"></i><h2 style="margin:0">Doc → Tasks</h2></div>
+    <div class="muted" style="font-size:13px;margin-bottom:14px">Upload one dual-half doc (N scripts, each with its ad copy + launch data below it). It splits into <b>N Creative Pipeline tasks</b> for the editor named in the doc. Launch data is held for the Drive-link → Production step. <b>Tokenless</b>: no Meta contact.</div>
+    <div id="sDrop" style="border:2px dashed #ffffff33;border-radius:12px;padding:26px;text-align:center;cursor:pointer">
+      <input type="file" id="sFile" accept=".docx" style="display:none">
+      <i data-lucide="file-up"></i>
+      <div style="margin-top:6px"><b>Drop a .docx</b> or <a href="#" id="sBrowse">browse</a></div>
+      <div class="muted" id="sFileName" style="margin-top:6px;font-size:13px"></div>
+    </div>
+    <div id="sErr" style="display:none;margin-top:10px;color:#ffb3b3;background:#2a1113;border:1px solid #e5484d;border-radius:8px;padding:10px;font-size:13px"></div>
+  </div>
+  <div id="sBody"></div>`));
+  const fi=$('#sFile'),drop=$('#sDrop');
+  $('#sBrowse').addEventListener('click',e=>{e.preventDefault();fi.click();});
+  drop.addEventListener('click',e=>{if(e.target.id!=='sBrowse')fi.click();});
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.borderColor='#5b8def';});
+  drop.addEventListener('dragleave',()=>{drop.style.borderColor='#ffffff33';});
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.style.borderColor='#ffffff33';if(e.dataTransfer.files[0])_shandleFile(e.dataTransfer.files[0]);});
+  fi.addEventListener('change',e=>{if(e.target.files[0])_shandleFile(e.target.files[0]);});
+  icons();
+  if(_sstate.split) _srender(_sstate.split);
+}
+
 /* routing */
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b)routeTo(b.dataset.tab);});
 function routeTo(tab){
   location.hash=tab;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
-  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance}[tab]||viewOverview)();
+  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,split:viewSplit,launch:viewLaunch}[tab]||viewOverview)();
   icons();
 }
 

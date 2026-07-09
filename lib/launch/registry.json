@@ -1,0 +1,126 @@
+{
+  "_generated_from": "clickup_structure.json stores[].meta (via scripts/gen-registry.mjs)",
+  "_note": "PROJECTION of the single source of truth. Do not hand-edit — run gen-registry.mjs. No tokens.",
+  "stores": {
+    "baby_snooze": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "baby_snooze",
+      "store_name": "Baby Snooze"
+    },
+    "being_real_you": {
+      "accounts": [
+        "act_1982482285976988"
+      ],
+      "aliases": [],
+      "business_id": "413037447654287",
+      "business_name": "BM3",
+      "slug": "being_real_you",
+      "store_name": "Being Real You"
+    },
+    "cake_craft_academy": {
+      "accounts": [
+        "act_797306028304336"
+      ],
+      "aliases": [],
+      "business_id": "185409887790444",
+      "business_name": "Verified on May 19, 2023",
+      "slug": "cake_craft_academy",
+      "store_name": "Cake Craft Academy"
+    },
+    "insight_academy": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "insight_academy",
+      "store_name": "Insight Academy"
+    },
+    "joyful_bites": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "joyful_bites",
+      "store_name": "joyful Bites"
+    },
+    "kids_bible_bundle": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "kids_bible_bundle",
+      "store_name": "Kids Bible Bundle"
+    },
+    "little_berry": {
+      "accounts": [
+        "act_1702624927420917"
+      ],
+      "aliases": [],
+      "business_id": "195046833129608",
+      "business_name": "Alom Rana",
+      "slug": "little_berry",
+      "store_name": "Little Berry"
+    },
+    "nano_learners": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "nano_learners",
+      "store_name": "Nano Learners"
+    },
+    "peaceful_path": {
+      "accounts": [],
+      "aliases": [
+        "Bible Made Simple"
+      ],
+      "business_id": null,
+      "business_name": null,
+      "slug": "peaceful_path",
+      "store_name": "Peaceful Path"
+    },
+    "quite_drift": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "quite_drift",
+      "store_name": "Quite Drift"
+    },
+    "quite_rise": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "quite_rise",
+      "store_name": "Quite Rise"
+    },
+    "skill_harbour": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "skill_harbour",
+      "store_name": "Skill Harbour"
+    },
+    "soap_craft_academy": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "soap_craft_academy",
+      "store_name": "Soap Craft Academy"
+    },
+    "zenvitals": {
+      "accounts": [],
+      "aliases": [],
+      "business_id": null,
+      "business_name": null,
+      "slug": "zenvitals",
+      "store_name": "zenvitals"
+    }
+  }
+}
