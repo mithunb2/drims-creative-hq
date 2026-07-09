@@ -586,7 +586,7 @@ async function _lsubmit(){
 
 function viewLaunch(){
   const v=$('#view'); v.innerHTML='';
-  v.appendChild(el(`<div class="panel">
+  v.appendChild(el(`<div><div class="panel">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i data-lucide="rocket"></i><h2 style="margin:0">Add Automation — Meta Launch</h2></div>
     <div class="muted" style="font-size:13px;margin-bottom:14px">Upload a launch doc (.docx) → parse → budget + safety preview. <b>Tokenless preview only</b>: no Meta connection, launch disabled behind the security gate.</div>
     <div id="lDrop" style="border:2px dashed #ffffff33;border-radius:12px;padding:26px;text-align:center;cursor:pointer">
@@ -597,7 +597,7 @@ function viewLaunch(){
     </div>
     <div id="lErr" style="display:none;margin-top:10px;color:#ffb3b3;background:#2a1113;border:1px solid #e5484d;border-radius:8px;padding:10px;font-size:13px"></div>
   </div>
-  <div id="lBody"></div>`));
+  <div id="lBody"></div></div>`));
   const fi=$('#lFile'),drop=$('#lDrop');
   $('#lBrowse').addEventListener('click',e=>{e.preventDefault();fi.click();});
   drop.addEventListener('click',e=>{if(e.target.id!=='lBrowse')fi.click();});
@@ -701,7 +701,7 @@ async function _scommit(split){
 
 function viewSplit(){
   const v=$('#view'); v.innerHTML='';
-  v.appendChild(el(`<div class="panel">
+  v.appendChild(el(`<div><div class="panel">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i data-lucide="split"></i><h2 style="margin:0">Doc → Tasks</h2></div>
     <div class="muted" style="font-size:13px;margin-bottom:14px">Upload one dual-half doc (N scripts, each with its ad copy + launch data below it). It splits into <b>N Creative Pipeline tasks</b> for the editor named in the doc. Launch data is held for the Drive-link → Production step. <b>Tokenless</b>: no Meta contact.</div>
     <div id="sDrop" style="border:2px dashed #ffffff33;border-radius:12px;padding:26px;text-align:center;cursor:pointer">
@@ -712,7 +712,7 @@ function viewSplit(){
     </div>
     <div id="sErr" style="display:none;margin-top:10px;color:#ffb3b3;background:#2a1113;border:1px solid #e5484d;border-radius:8px;padding:10px;font-size:13px"></div>
   </div>
-  <div id="sBody"></div>`));
+  <div id="sBody"></div></div>`));
   const fi=$('#sFile'),drop=$('#sDrop');
   $('#sBrowse').addEventListener('click',e=>{e.preventDefault();fi.click();});
   drop.addEventListener('click',e=>{if(e.target.id!=='sBrowse')fi.click();});
