@@ -1,11 +1,11 @@
-// Vercel Serverless Function — POST /api/launch/parse
+// Vercel Serverless Function — POST /api/launch-parse
 // Tokenless, read-only, ZERO Meta contact. Receives the browser-extracted { paragraphs, tables }
 // (the .docx is unzipped client-side via CDN JSZip) and runs the FULL parse/validate/budget/routing
 // logic server-authoritative. Returns the launch plan the UI renders as the preview.
 //
 // The ASL headroom is NOT read here (that needs a live Meta connection, which is gated). The plan's
 // asl_gate is therefore 'unknown' -> launch_permission.allowed = false (fail-closed). No secrets.
-import { parseLaunchDoc } from '../../lib/launch/parser.js';
+import { parseLaunchDoc } from '../lib/launch/parser.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       plan,
     });
   } catch (err) {
-    console.error('[api/launch/parse] error:', err);
+    console.error('[api/launch-parse] error:', err);
     return res.status(500).json({ error: 'parse failed', detail: String((err && err.message) || err) });
   }
 }

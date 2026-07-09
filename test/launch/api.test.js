@@ -4,8 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import parseHandler from '../../api/launch/parse.js';
-import submitHandler from '../../api/launch/submit.js';
+import parseHandler from '../../api/launch-parse.js';
+import submitHandler from '../../api/launch-submit.js';
 
 const extracted = JSON.parse(readFileSync(new URL('./fixtures/bms_golden.extracted.json', import.meta.url), 'utf8'));
 

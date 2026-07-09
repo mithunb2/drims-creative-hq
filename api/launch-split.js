@@ -1,11 +1,11 @@
-// Vercel Serverless Function — POST /api/launch/split
+// Vercel Serverless Function — POST /api/launch-split
 // Tokenless w.r.t. META (no Meta contact). Parses a dual-half doc into the SPLIT model and resolves
 // the doc-named editor to a ClickUp assignee using the buyer's ClickUp token (forwarded in the
 // Authorization header, same token the app already uses for /api/clickup). If the editor can't be
 // resolved unambiguously, it becomes a BLOCKER — never a guess. The browser reviews the returned
 // model, then commits launch_jobs/launch_holds to Supabase itself (authenticated session).
-import { parseSplitDoc } from '../../lib/launch/parser.js';
-import { membersFromTeamResponse, matchEditor } from '../../lib/launch/editor.js';
+import { parseSplitDoc } from '../lib/launch/parser.js';
+import { membersFromTeamResponse, matchEditor } from '../lib/launch/editor.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true, tokenless: true, split });
   } catch (err) {
-    console.error('[api/launch/split] error:', err);
+    console.error('[api/launch-split] error:', err);
     return res.status(500).json({ error: 'split failed', detail: String((err && err.message) || err) });
   }
 }

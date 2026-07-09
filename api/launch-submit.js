@@ -1,4 +1,4 @@
-// Vercel Serverless Function — POST /api/launch/submit
+// Vercel Serverless Function — POST /api/launch-submit
 // The launch endpoint. In the tokenless phase it is PHYSICALLY UNABLE to launch, guarded by two
 // independent gates that BOTH must open, neither of which is wired yet:
 //
@@ -9,7 +9,7 @@
 //
 // It still re-parses the doc SERVER-SIDE (never trusts a client plan) and reports the launch_permission
 // so the UI can show exactly why launch is disabled. No token is read, imported, or referenced here.
-import { parseLaunchDoc } from '../../lib/launch/parser.js';
+import { parseLaunchDoc } from '../lib/launch/parser.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
       launch_permission: plan.launch_permission,
     });
   } catch (err) {
-    console.error('[api/launch/submit] error:', err);
+    console.error('[api/launch-submit] error:', err);
     return res.status(500).json({ error: 'submit failed', detail: String((err && err.message) || err) });
   }
 }

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { matchEditor, membersFromTeamResponse } from '../../lib/launch/editor.js';
-import splitHandler from '../../api/launch/split.js';
+import splitHandler from '../../api/launch-split.js';
 
 const extracted = JSON.parse(readFileSync(new URL('./fixtures/dualhalf_3.extracted.json', import.meta.url), 'utf8'));
 const noeditor = JSON.parse(readFileSync(new URL('./fixtures/dualhalf_noeditor.extracted.json', import.meta.url), 'utf8'));
