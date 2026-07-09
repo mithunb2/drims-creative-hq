@@ -464,7 +464,7 @@ async function _lhandleFile(file){
     const extracted=await _lextract(file);
     const r=await fetch('/api/launch/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(extracted)});
     const j=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(j.error||('parse failed (HTTP '+r.status+')'));
+    if(!r.ok) throw new Error([j.error,j.detail].filter(Boolean).join(' — ')||('parse failed (HTTP '+r.status+')'));
     _lstate.plan=j.plan; _lstate.fileName=file.name; _lstate.acks={}; _lstate.extracted=extracted;
     nameB.textContent=file.name+' — parsed ✓';
     _lrender(j.plan);
@@ -623,7 +623,7 @@ async function _shandleFile(file){
     // No ClickUp token in the browser: editor resolution is SERVER-SIDE (Vercel env) or deferred to intake.
     const r=await fetch('/api/launch/split',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(extracted)});
     const j=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(j.error||('split failed (HTTP '+r.status+')'));
+    if(!r.ok) throw new Error([j.error,j.detail].filter(Boolean).join(' — ')||('split failed (HTTP '+r.status+')'));
     _sstate.split=j.split; _sstate.fileName=file.name;
     nameB.textContent=file.name+' — '+j.split.count+' entr'+(j.split.count===1?'y':'ies')+' parsed ✓';
     _srender(j.split);
