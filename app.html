@@ -309,6 +309,64 @@ table.tbl tbody tr:hover{background:var(--bg)}
 .sch-btn [data-lucide]{width:14px;height:14px}
 @media(max-width:560px){.sch-btn{margin-left:0;width:100%;justify-content:center}}
 
+/* Stage 2/3 — inline edit affordances + edited chips */
+.rev-edit{border:0;background:none;color:var(--mut2);cursor:pointer;padding:2px;border-radius:6px;display:inline-grid;place-items:center;flex:0 0 auto}
+.rev-edit:hover{color:var(--accent-ink);background:var(--accent-soft)}
+.rev-edit [data-lucide]{width:12px;height:12px}
+.rev-edited{font-size:9.5px;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border-radius:5px;padding:1px 5px;letter-spacing:.02em;text-transform:uppercase}
+.rev-full{font-size:10.5px;color:var(--mut2);font-family:ui-monospace,Menlo,monospace;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.rj-editbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:8px;padding-top:10px;border-top:1px dashed var(--line2)}
+.rj-editbar .rj-hint{font-size:11px;color:var(--mut2);display:inline-flex;align-items:center;gap:5px}
+.rj-editbar .rj-hint [data-lucide]{width:12px;height:12px}
+.rj-editbtn{font-size:11.5px;font-weight:650;border:1px solid var(--line);background:var(--card);color:var(--ink2);border-radius:8px;padding:5px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.rj-editbtn:hover{border-color:#d9dcee;background:var(--bg)}
+.rj-editbtn.safety{border-color:#f0e2bd;background:#fdf6e7;color:#a86a09}
+.rj-editbtn [data-lucide]{width:12px;height:12px}
+
+/* Edit modal */
+#editWrap{position:fixed;inset:0;z-index:70;display:none}
+#editWrap.show{display:block}
+#editWrap .ov{position:absolute;inset:0;background:rgba(2,6,23,.42);backdrop-filter:blur(2px);animation:fade .16s ease}
+.edit-modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(460px,94vw);max-height:90vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 70px rgba(2,6,23,.3);padding:20px;animation:slidein .2s cubic-bezier(.16,1,.3,1)}
+.edit-modal h3{margin:0 0 3px;font-size:16px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.edit-modal .em-sub{font-size:12px;color:var(--mut);margin-bottom:14px}
+.edit-modal label{font-size:11.5px;font-weight:700;color:var(--ink2);display:block;margin:0 0 5px}
+.edit-modal input,.edit-modal select,.edit-modal textarea{width:100%;font-family:inherit;font-size:13.5px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px;box-sizing:border-box}
+.edit-modal textarea{min-height:120px;resize:vertical;line-height:1.5;white-space:pre-wrap}
+.edit-modal input:focus,.edit-modal select:focus,.edit-modal textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.em-help{font-size:11.5px;color:var(--mut);margin-top:6px;line-height:1.45}
+.em-safety{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#8a5a10;background:#fdf6e7;border:1px solid #f0e2bd;border-radius:10px;padding:9px 11px;margin:12px 0 0}
+.em-safety [data-lucide]{width:15px;height:15px;flex:0 0 auto;margin-top:1px;color:#b45309}
+.em-result{font-size:12.5px;border-radius:10px;padding:9px 11px;margin-top:12px;line-height:1.45;display:none}
+.em-result.show{display:block}
+.em-result.ok{background:#f0fbf4;border:1px solid #cdeede;color:#15803d}
+.em-result.err{background:#fdecec;border:1px solid #f3caca;color:#c0392b}
+.em-actions{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap}
+.em-btn{font-size:13px;font-weight:700;padding:9px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.em-btn.prim{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.em-btn.prim:hover{background:var(--indigo-d)}
+.em-btn.ghost{margin-left:auto;color:var(--mut)}
+.em-btn:disabled{opacity:.5;cursor:not-allowed}
+.em-btn [data-lucide]{width:14px;height:14px}
+
+/* Audit log */
+.audit{margin-top:18px}
+.audit-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink2);margin:0 2px 10px}
+.audit-h [data-lucide]{width:15px;height:15px;color:var(--mut)}
+.audit-h .pill{margin-left:6px}
+.audit-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);margin-bottom:7px;font-size:12.5px}
+.audit-row.safety{border-color:#f0e2bd;background:#fdfaf1}
+.audit-row .a-time{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--mut2);flex:0 0 auto}
+.audit-row .a-who{font-weight:700;color:var(--ink2)}
+.audit-row .a-field{font-weight:650;color:var(--accent-ink);background:var(--accent-soft);border-radius:6px;padding:1px 7px;font-size:11.5px}
+.audit-row.safety .a-field{color:#a86a09;background:#f8f1e4}
+.audit-row .a-chg{color:var(--ink2)}
+.audit-row .a-chg .old{color:var(--mut2);text-decoration:line-through}
+.audit-row .a-chg .new{font-weight:650}
+.audit-row .a-task{margin-left:auto;font-size:11px;color:var(--mut);font-family:ui-monospace,Menlo,monospace}
+.audit-row .a-safeflag{font-size:9.5px;font-weight:700;color:#b45309;background:#fbe9cf;border-radius:5px;padding:1px 6px;text-transform:uppercase}
+.audit-empty{font-size:12.5px;color:var(--mut2);padding:10px 12px;border:1px dashed var(--line);border-radius:10px}
+
 /* detail drawer */
 #drawerWrap{position:fixed;inset:0;z-index:60;display:none}
 #drawerWrap.show{display:block}
@@ -463,6 +521,7 @@ table.tbl tbody tr:hover{background:var(--bg)}
 </section>
 
 <div id="drawerWrap"><div class="ov"></div><aside class="drawer" id="drawer"></aside></div>
+<div id="editWrap"><div class="ov"></div><div class="edit-modal" id="editModal"></div></div>
 
 <script>
 const CFG = window.DRIMS_CONFIG || {};
@@ -926,30 +985,166 @@ function _cfgBudget(cfg){cfg=cfg||{};
 function _adSetLabel(la){return [la.ad_set, la.ad_set_name].filter(Boolean).join(' · ')||(la.ad_set||'');}
 function _adName(la){return la.name_string||(la.tokens&&(la.tokens.ad_name||la.tokens.name))||'';}
 
+/* ── EDIT LAYER (Stage 2/3): effective values (override ?? held), the server-validated write path,
+   the edit modal, and the audit log. Edits go ONLY through POST /api/launch-edit (JWT-verified,
+   re-validated server-side); the browser never writes launch_holds/launch_jobs directly. ──────── */
+const _CFGK={budget_amount:'Budget Amount (USD)',budget_type:'Budget Type',budget_level:'Budget Level',spend_cap:'Launch Spend Cap (USD)',run_length:'Run Length (days)'};
+function _effConfig(job){const c={...((job&&job.campaign_config)||{})},o=(job&&job.overrides)||{};for(const k in _CFGK){if(o[k]!=null&&o[k]!=='')c[_CFGK[k]]=String(o[k]);}return c;}
+function _effAccount(job){const o=(job&&job.overrides)||{};return (o.account_id!=null&&o.account_id!=='')?o.account_id:((job&&job.account_id)||null);}
+function _storeAbbr(s){const w=String(s||'').trim().split(/[\s_]+/).filter(Boolean);if(!w.length)return '';const skip=new Set(['the','of','and','a','an','&']);const sig=w.filter(x=>!skip.has(x.toLowerCase()));return (sig.length?sig:w).map(x=>x[0].toUpperCase()).join('');}
+function _genShortName(hold,job){const lh=(hold&&hold.launch_half)||{};const abbr=_storeAbbr((job&&(job.store_name||job.store_slug))||'');const hook=(lh.tokens&&lh.tokens.h)||(hold&&hold.test_label)||(lh.tokens&&lh.tokens.hook)||'';const setL=(hold&&hold.overrides&&hold.overrides.ad_set)||lh.ad_set||'';const mid=hook?String(hook):(hold&&hold.ad_number?('AD '+hold.ad_number):(lh.video_file||''));return [abbr,mid,setL].filter(Boolean).join(' · ');}
+function _effShort(hold,job){const o=(hold&&hold.overrides)||{};return (o.ad_name_short!=null&&o.ad_name_short!=='')?o.ad_name_short:_genShortName(hold,job);}
+function _effAdSet(hold){const o=(hold&&hold.overrides)||{};return (o.ad_set!=null)?o.ad_set:((hold.launch_half&&hold.launch_half.ad_set)||'');}
+function _effCopy(hold){const o=(hold&&hold.overrides)||{};return (o.ad_copy!=null)?o.ad_copy:((hold.launch_half&&hold.launch_half.ad_copy)||'');}
+function _effFull(hold){const o=(hold&&hold.overrides)||{};return (o.ad_name_full!=null)?o.ad_name_full:((hold.launch_half&&hold.launch_half.name_string)||'');}
+function _ovr(obj,key){return !!(obj&&obj.overrides&&obj.overrides[key]!=null&&obj.overrides[key]!=='');}
+const _pencil=(on)=>`<button class="rev-edit" data-edit="${on}" title="Edit"><i data-lucide="pencil"></i></button>`;
+const _editedChip='<span class="rev-edited" title="Edited from the doc value">edited</span>';
+
+async function _accessToken(){try{const {data}=await sb.auth.getSession();return data.session?data.session.access_token:null;}catch(e){return null;}}
+async function _launchEdit(payload){
+  const tok=await _accessToken(); if(!tok) return {ok:false,status:401,reason:'Not signed in.'};
+  try{const r=await fetch('/api/launch-edit',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(payload)});
+    const j=await r.json().catch(()=>({})); return {...j,status:r.status,ok:r.ok&&j.ok!==false};}
+  catch(e){return {ok:false,status:0,reason:String(e.message||e)};}
+}
+
+let _editState=null;
+// spec: {title,label,icon,field,job_id,hold_id,kind,value,choices,help,safety,applies,overridden}
+function _openEdit(spec){
+  _editState=spec;
+  const v=spec.value==null?'':spec.value;
+  const input = spec.kind==='textarea' ? `<textarea id="emInput">${_esc(v)}</textarea>`
+    : spec.kind==='select' ? `<select id="emInput" ${(spec.choices||[]).length<2?'disabled':''}>${(spec.choices||[]).map(o=>`<option value="${_esc(o.v)}" ${String(o.v)===String(v)?'selected':''}>${_esc(o.l)}</option>`).join('')}</select>`
+    : `<input id="emInput" type="text" value="${_esc(v)}" ${spec.kind==='number'?'inputmode="decimal"':''}>`;
+  $('#editModal').innerHTML=`
+    <h3><i data-lucide="${spec.icon||'pencil'}"></i>${_esc(spec.title)}</h3>
+    ${spec.applies?`<div class="em-sub">${_esc(spec.applies)}</div>`:''}
+    <label>${_esc(spec.label||spec.title)}</label>
+    ${input}
+    ${spec.help?`<div class="em-help">${spec.help}</div>`:''}
+    ${spec.safety?`<div class="em-safety"><i data-lucide="shield-alert"></i><div>Safety-critical. Saving re-runs the budget + ASL + registry checks on the server. An edit that would overspend the account's ASL or route spend cross-store is <b>rejected</b>. Every change is logged with your name.</div></div>`:''}
+    <div class="em-result" id="emResult"></div>
+    <div class="em-actions">
+      <button class="em-btn prim" id="emSave"><i data-lucide="check"></i>Save${spec.safety?' & re-validate':''}</button>
+      ${spec.overridden?`<button class="em-btn" id="emRevert"><i data-lucide="rotate-ccw"></i>Revert to doc</button>`:''}
+      <button class="em-btn ghost" onclick="_closeEdit()">Cancel</button>
+    </div>`;
+  $('#emSave').addEventListener('click',_saveEdit);
+  const rv=$('#emRevert'); if(rv) rv.addEventListener('click',_revertEdit);
+  $('#editWrap').classList.add('show'); icons(); setTimeout(()=>{const i=$('#emInput'); if(i&&!i.disabled)i.focus();},30);
+}
+function _closeEdit(){$('#editWrap').classList.remove('show'); _editState=null;}
+function _showEditResult(res){
+  const box=$('#emResult'); if(!box)return; box.className='em-result show '+(res.ok?'ok':'err');
+  if(res.ok){ const rv=res.revalidation||{}; let x=[];
+    if(rv.budget) x.push('budget '+_esc(rv.budget.arithmetic||('$'+rv.budget.daily_total+'/day')));
+    const asl=rv.asl; if(asl) x.push('ASL: '+_esc(asl.state||asl.decision||'')+' '+_esc(asl.message||asl.reason||''));
+    if(rv.account_owner) x.push('account belongs to '+_esc(rv.account_owner));
+    box.innerHTML='✓ Saved &amp; logged'+(x.length?('<div style="margin-top:4px;font-size:11.5px">'+x.join(' · ')+'</div>'):'');
+  } else {
+    const why = res.status===503 ? (res.reason||'Editing isn’t enabled yet — provision SUPABASE_SERVICE_ROLE_KEY in Vercel; the surface stays read-only until then.')
+      : res.status===401 ? 'Your session expired — sign in again to edit.'
+      : (res.reason||res.error||'Edit rejected.');
+    box.innerHTML='✕ '+_esc(why);
+  }
+}
+function _applyEditLocal(spec,val){
+  if(spec.hold_id){const h=(_pipeData.holds||[]).find(x=>x.id===spec.hold_id); if(h){h.overrides=h.overrides||{}; h.overrides[spec.field]=val;}}
+  else{const j=(_pipeData.jobs||[]).find(x=>x.id===spec.job_id); if(j){j.overrides=j.overrides||{}; j.overrides[spec.field]=val;}}
+}
+async function _saveEdit(){
+  const spec=_editState; if(!spec)return; const val=$('#emInput').value;
+  const btn=$('#emSave'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader"></i>Saving…'; icons();
+  const res=await _launchEdit({job_id:spec.job_id,hold_id:spec.hold_id||null,field:spec.field,value:val});
+  _showEditResult(res); btn.disabled=false; btn.innerHTML='<i data-lucide="check"></i>Save'+(spec.safety?' &amp; re-validate':''); icons();
+  if(res.ok){ _applyEditLocal(spec,val); setTimeout(()=>{_closeEdit(); mountStage(_pipeStage);},700); }
+}
+async function _revertEdit(){
+  const spec=_editState; if(!spec)return;
+  const res=await _launchEdit({job_id:spec.job_id,hold_id:spec.hold_id||null,field:spec.field,op:'revert'});
+  _showEditResult(res.ok?{ok:true}:res);
+  if(res.ok){ if(spec.hold_id){const h=(_pipeData.holds||[]).find(x=>x.id===spec.hold_id); if(h&&h.overrides)delete h.overrides[spec.field];}
+    else{const j=(_pipeData.jobs||[]).find(x=>x.id===spec.job_id); if(j&&j.overrides)delete j.overrides[spec.field];}
+    setTimeout(()=>{_closeEdit(); mountStage(_pipeStage);},550); }
+}
+$('#editWrap').addEventListener('click',e=>{if(e.target.classList.contains('ov'))_closeEdit();});
+
+// Audit trail (read-only; RLS lets authenticated SELECT, only the server writes it).
+async function _loadAudit(jid){try{const {data}=await sb.from('launch_edit_log').select('*').eq('job_id',jid).order('created_at',{ascending:false});return data||[];}catch(e){return [];}}
+async function _loadAllAudit(){try{const {data}=await sb.from('launch_edit_log').select('*').order('created_at',{ascending:false}).limit(100);return data||[];}catch(e){return [];}}
+function _fmtEditTime(t){try{return new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+function _auditRowHtml(r,holdsById){
+  const task=r.hold_id&&holdsById[r.hold_id]?('AD '+(holdsById[r.hold_id].ad_number||'—')):'campaign';
+  return `<div class="audit-row ${r.safety_critical?'safety':''}">
+    <span class="a-time">${_esc(_fmtEditTime(r.created_at))}</span>
+    <span class="a-who">${_esc(r.actor_email||'?')}</span>
+    <span class="a-field">${_esc(r.field)}</span>
+    ${r.safety_critical?'<span class="a-safeflag">money</span>':''}
+    <span class="a-chg"><span class="old">${_esc((r.old_value||'—').slice(0,60))}</span> → <span class="new">${_esc((r.new_value||'').slice(0,60))}</span></span>
+    <span class="a-task">${_esc(task)}</span></div>`;
+}
+
 function viewPipeStatus(mount){
   const v=mount||$('#view'); v.innerHTML='';
   const {jobs,holds}=_pipeData;
   if(!holds.length){ v.appendChild(emptyState('inbox','Nothing in production yet','Commit a split doc in Stage 1 — its tasks appear here as they move through Production.')); icons(); return; }
   const jobById={}; jobs.forEach(j=>{jobById[j.id]=j;});
   const byJob={}; holds.forEach(h=>{_holdById[h.id]=h;(byJob[h.job_id]||(byJob[h.job_id]=[])).push(h);});
-  v.appendChild(el('<div class="rev-note"><i data-lucide="eye"></i>Read-only review — double-check each delivered creative before launch. Editors deliver via ClickUp; nothing here writes or launches.</div>'));
+  v.appendChild(el('<div class="rev-note"><i data-lucide="pencil"></i>Review &amp; edit before launch — budget, ad account, ad set, names and copy are editable; every change is validated + logged. Launch stays server-gated.</div>'));
   const wrap=el('<div></div>');
   Object.keys(byJob).forEach(jid=>{
     const hs=byJob[jid].slice().sort((a,b)=>(a.entry_index||0)-(b.entry_index||0));
-    const job=jobById[jid]||{}, bud=_cfgBudget(job.campaign_config), done=hs.filter(h=>h.promoted_at).length;
+    const job=jobById[jid]||{}, bud=_cfgBudget(_effConfig(job)), done=hs.filter(h=>h.promoted_at).length;
+    const acct=_effAccount(job);
     const card=el(`<div class="rev-job"><div class="rev-jobh">
       <span class="rj-nm">${_esc(job.store_name||job.store_slug||'—')}</span>
       <span class="rj-meta"><i data-lucide="file-text"></i>${_esc(job.source_filename||'doc')}</span>
       ${job.editor_name?`<span class="rj-meta"><i data-lucide="user"></i>${_esc(job.editor_name)}</span>`:''}
-      ${bud.summary?`<span class="rj-meta"><i data-lucide="wallet"></i>${_esc(bud.summary)}</span>`:''}
-      ${job.account_id?`<span class="rj-meta"><i data-lucide="megaphone"></i>${_esc(job.account_id)}</span>`:''}
+      ${bud.summary?`<span class="rj-meta"><i data-lucide="wallet"></i>${_esc(bud.summary)}${(_ovr(job,'budget_amount')||_ovr(job,'spend_cap')||_ovr(job,'run_length'))?' '+_editedChip:''}</span>`:''}
+      ${acct?`<span class="rj-meta"><i data-lucide="megaphone"></i>${_esc(acct)}${_ovr(job,'account_id')?' '+_editedChip:''}</span>`:''}
       <span class="rj-prog">${done}/${hs.length} delivered</span>
+      <div class="rj-editbar">
+        <span class="rj-hint"><i data-lucide="settings-2"></i>Applies to all ${hs.length} ad${hs.length===1?'':'s'}:</span>
+        <button class="rj-editbtn safety" data-jobedit="budget_amount"><i data-lucide="wallet"></i>Budget</button>
+        <button class="rj-editbtn safety" data-jobedit="spend_cap"><i data-lucide="gauge"></i>Spend cap</button>
+        <button class="rj-editbtn safety" data-jobedit="account_id"><i data-lucide="megaphone"></i>Ad account</button>
+      </div>
     </div></div>`);
+    card.querySelectorAll('[data-jobedit]').forEach(b=>b.addEventListener('click',()=>_editField(b.getAttribute('data-jobedit'),null,job)));
     hs.forEach(h=>card.appendChild(_revCard(h,job,bud)));
     wrap.appendChild(card);
   });
-  v.appendChild(wrap); icons();
-  _fillDrives(holds);   // async: resolve delivered creatives' Drive URLs and upgrade the buttons
+  v.appendChild(wrap);
+  // Pipeline-level audit trail (who changed what, when).
+  const auditBox=el('<div class="audit" id="auditLog"><div class="audit-h"><i data-lucide="history"></i>Edit log<span class="pill">loading…</span></div><div id="auditRows"></div></div>');
+  v.appendChild(auditBox); icons();
+  _fillDrives(holds);
+  _loadAllAudit().then(rows=>{
+    const box=$('#auditLog'); if(!box)return;
+    box.querySelector('.pill').textContent=rows.length?(rows.length+' change'+(rows.length===1?'':'s')):'no edits';
+    const rowsBox=$('#auditRows');
+    rowsBox.innerHTML = rows.length ? rows.map(r=>_auditRowHtml(r,_holdById)).join('')
+      : '<div class="audit-empty">No edits yet — the doc-committed values are unchanged.</div>';
+    icons();
+  });
+}
+
+// One entry point for every editable field (per-ad + job-level). Builds the modal spec and opens it.
+function _editField(field,h,job){
+  const N=(_pipeData.holds||[]).filter(x=>x.job_id===job.id).length;
+  const applies='Applies to all '+N+' ad'+(N===1?'':'s')+' in this job.';
+  const ec=_effConfig(job);
+  const S={
+    ad_set:{title:'Ad set',label:'Ad set',icon:'layout-grid',kind:'text',value:_effAdSet(h),hold_id:h&&h.id,overridden:_ovr(h,'ad_set'),help:'The Meta ad set this creative launches into.'},
+    ad_name_short:{title:'Short ad name',label:'Short name (shown across the pipeline)',icon:'tag',kind:'text',value:_effShort(h,job),hold_id:h&&h.id,overridden:_ovr(h,'ad_name_short'),help:'Human-readable, unique within this job. The full naming string is kept for the actual launch + tracking.'},
+    ad_name_full:{title:'Full naming string',label:'Full name string (Meta / tracking)',icon:'hash',kind:'text',value:_effFull(h),hold_id:h&&h.id,overridden:_ovr(h,'ad_name_full'),help:'The pipe-delimited naming convention used as the real Meta ad name.'},
+    ad_copy:{title:'Ad copy',label:'Ad copy',icon:'file-text',kind:'textarea',value:_effCopy(h),hold_id:h&&h.id,overridden:_ovr(h,'ad_copy'),help:'Saved exactly as you type it — never regenerated.'},
+    budget_amount:{title:'Budget',label:'Budget Amount (USD/day) — bare number',icon:'wallet',kind:'number',value:ec['Budget Amount (USD)'],overridden:_ovr(job,'budget_amount'),safety:true,applies,help:'A bare number (e.g. 15 — no $ or ~). Re-runs the budget + ASL check on save.'},
+    spend_cap:{title:'Launch spend cap',label:'Launch Spend Cap (USD) — bare number',icon:'gauge',kind:'number',value:ec['Launch Spend Cap (USD)'],overridden:_ovr(job,'spend_cap'),safety:true,applies,help:'The most this launch may spend. Re-validated against the account ASL headroom.'},
+    account_id:{title:'Ad account',label:'Ad account (act_…)',icon:'megaphone',kind:'text',value:_effAccount(job),overridden:_ovr(job,'account_id'),safety:true,applies,help:'Must be one of this store’s registry accounts — cross-store switching is blocked, and the new account’s ASL is re-checked.'},
+  }[field];
+  if(!S)return; S.field=field; S.job_id=job.id; _openEdit(S);
 }
 
 function _revCard(h,job,bud){
@@ -957,8 +1152,10 @@ function _revCard(h,job,bud){
   const st=delivered?{c:'ok',t:'Delivered'}:h.clickup_task_id?{c:'wait',t:'In production'}:{c:'wait',t:'Queued'};
   const taskUrl=h.clickup_task_id?('https://app.clickup.com/t/'+_esc(h.clickup_task_id)):'';
   const prodUrl=h.production_task_id?('https://app.clickup.com/t/'+_esc(h.production_task_id)):'';
-  const copy=_esc((la.ad_copy||'').trim());
-  const spec=(ic,k,val,mono)=>`<div class="rev-spec"><span class="rs-k"><i data-lucide="${ic}"></i>${k}</span><span class="rs-v${mono?' mono':''}" title="${_esc(val||'')}">${val?_esc(val):'—'}</span></div>`;
+  const copy=_esc((_effCopy(h)||'').trim());
+  const short=_effShort(h,job), full=_effFull(h);
+  // spec with an optional per-ad edit pencil (data-edit=field) + edited chip
+  const spec=(ic,k,val,field,mono)=>`<div class="rev-spec"><span class="rs-k"><i data-lucide="${ic}"></i>${k}</span><span class="rs-v${mono?' mono':''}" title="${_esc(val||'')}">${val?_esc(val):'—'}${field?' '+_pencil(field):''}${field&&_ovr(h,field)?' '+_editedChip:''}</span></div>`;
   const vid = delivered
     ? `<a class="rev-vid" data-drive-for="${_esc(h.id)}" ${taskUrl?`href="${taskUrl}"`:'href="#"'} target="_blank" rel="noopener" title="Open delivered video"><span class="rv-play"><i data-lucide="play"></i></span><span class="rv-badge"><i data-lucide="loader"></i>resolving…</span></a>`
     : `<div class="rev-vid wait" title="Editor hasn't delivered yet"><span class="rv-play"><i data-lucide="clock"></i></span><span class="rv-badge"><i data-lucide="hourglass"></i>awaiting</span></div>`;
@@ -967,11 +1164,13 @@ function _revCard(h,job,bud){
       <div class="rev-top"><span class="rev-ad">AD ${_esc(h.ad_number||'—')}</span><span class="rev-file">${_esc(h.video_file||'')}</span>
         <span class="rev-dot ${st.c}"><i></i>${st.t}</span></div>
       <div class="rev-specs">
-        ${spec('layout-grid','Ad set',_adSetLabel(la))}
-        ${spec('wallet','Budget',bud.perAd)}
-        ${spec('megaphone','Ad account',job.account_id,true)}
-        ${spec('tag','Ad name',_adName(la))}
+        ${spec('layout-grid','Ad set',_effAdSet(h),'ad_set')}
+        ${spec('wallet','Budget',bud.perAd,'budget_amount')}
+        ${spec('megaphone','Ad account',_effAccount(job),'account_id',true)}
+        ${spec('tag','Ad name',short,'ad_name_short')}
       </div>
+      ${full?`<div class="rev-full" title="${_esc(full)}"><i data-lucide="hash" style="width:10px;height:10px;vertical-align:-1px"></i> ${_esc(full)} ${_pencil('ad_name_full')}</div>`:''}
+      <div style="display:flex;align-items:center;gap:6px;margin:8px 0 2px"><span style="font-size:11px;font-weight:700;color:var(--mut)">AD COPY</span>${_pencil('ad_copy')}${_ovr(h,'ad_copy')?_editedChip:''}</div>
       ${copy?`<div class="rev-copy clamp">${copy}</div>`:'<div class="rev-copy" style="color:var(--mut2)">— no ad copy held —</div>'}
       <div class="rev-actions">
         ${delivered?`<a class="rev-btn prim" data-drive-for="${_esc(h.id)}" ${taskUrl?`href="${taskUrl}"`:'href="#"'} target="_blank" rel="noopener"><i data-lucide="external-link"></i>Open in Drive</a>`:''}
@@ -981,6 +1180,7 @@ function _revCard(h,job,bud){
       </div>
     </div></div>`);
   const rb=c.querySelector('[data-review]'); if(rb) rb.addEventListener('click',()=>_openHoldReview(h.id));
+  c.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>_editField(b.getAttribute('data-edit'),h,job)));
   return c;
 }
 
@@ -1009,36 +1209,46 @@ function _setDrive(hid,drive,taskId){
   icons();
 }
 
-// Review drawer — the buyer's pre-launch double-check: video + full held ad copy + every spec.
+function _ovrF(field,h,job){return ['budget_amount','spend_cap','run_length','account_id'].includes(field)?_ovr(job,field):_ovr(h,field);}
+// Review drawer — pre-launch double-check + edit: video + effective specs (editable) + full ad copy
+// + this task's edit history.
 function _openHoldReview(hid){
   const h=_holdById[hid]; if(!h)return;
   const job=(_pipeData.jobs||[]).find(j=>j.id===h.job_id)||{};
-  const la=h.launch_half||{}, bud=_cfgBudget(job.campaign_config), delivered=!!h.promoted_at;
+  const la=h.launch_half||{}, bud=_cfgBudget(_effConfig(job)), delivered=!!h.promoted_at;
   const drive=h._drive||'', embed=_driveEmbed(drive);
   const taskUrl=h.clickup_task_id?('https://app.clickup.com/t/'+_esc(h.clickup_task_id)):'';
   const openUrl=drive||taskUrl;
-  const row=(ic,k,val)=>`<div class="drow"><span class="dk"><i data-lucide="${ic}"></i>${k}</span><span class="dv${val?'':' muted'}">${val?_esc(val):'—'}</span></div>`;
   const campaign=(la.tokens&&la.tokens.campaign_label)||(job.campaign_config&&(job.campaign_config['Campaign Name']||job.campaign_config['Campaign']))||'';
+  const rowE=(ic,k,val,field)=>`<div class="drow"><span class="dk"><i data-lucide="${ic}"></i>${k}</span><span class="dv${val?'':' muted'}">${val?_esc(val):'—'}${field?' '+_pencil(field):''}${field&&_ovrF(field,h,job)?' '+_editedChip:''}</span></div>`;
   const player = delivered&&embed
     ? `<div style="border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;aspect-ratio:16/9;background:#000"><iframe src="${embed}" style="width:100%;height:100%;border:0" allow="autoplay" allowfullscreen></iframe></div>` : '';
   $('#drawer').innerHTML=`
-    <div class="dh"><div class="dt"><div class="dnm">AD ${_esc(h.ad_number||'—')} · ${_esc(h.video_file||'')}</div>
-      <div class="dsub"><i data-lucide="store" style="width:14px;height:14px"></i>${_esc(job.store_name||job.store_slug||'—')}${h.test_label?' · '+_esc(h.test_label):''}</div></div>
+    <div class="dh"><div class="dt"><div class="dnm">${_esc(_effShort(h,job))}</div>
+      <div class="dsub"><i data-lucide="store" style="width:14px;height:14px"></i>${_esc(job.store_name||job.store_slug||'—')} · AD ${_esc(h.ad_number||'—')} · ${_esc(h.video_file||'')}</div></div>
       <button class="iconbtn" onclick="closeDrawer()"><i data-lucide="x"></i></button></div>
     <div class="db">
       <span class="stagepill" style="${delivered?'background:#16a34a1a;color:#16a34a':'background:#b453091a;color:#b45309'}"><i data-lucide="${delivered?'check-circle':'clock'}"></i>${delivered?'Delivered — ready to review':'Awaiting editor delivery'}</span>
       ${player}
       ${openUrl?`<div class="dlink" style="margin-top:0"><a class="btn" style="text-decoration:none;width:auto" href="${openUrl}" target="_blank" rel="noopener"><i data-lucide="external-link"></i>${drive?'Open in Drive':'Open task in ClickUp'}</a></div><div style="height:6px"></div>`:''}
-      ${row('layout-grid','Ad set',_adSetLabel(la))}
-      ${row('megaphone','Ad account',job.account_id)}
-      ${row('wallet','Budget',bud.perAd)}
-      ${row('gauge','Spend cap',bud.cap?('$'+bud.cap):'')}
-      ${row('calendar-range','Run length',bud.run?(bud.run+' days'):'')}
-      ${row('tag','Ad name',_adName(la))}
-      ${row('folder','Campaign',campaign)}
-      <div class="dwin"><div class="wk"><i data-lucide="file-text"></i>Ad copy (held · reused, not regenerated)</div><div class="wv" style="white-space:pre-wrap;word-break:normal;font-weight:500">${_esc((la.ad_copy||'').trim())||'—'}</div></div>
+      ${rowE('tag','Short name',_effShort(h,job),'ad_name_short')}
+      ${rowE('hash','Full name',_effFull(h),'ad_name_full')}
+      ${rowE('layout-grid','Ad set',_effAdSet(h),'ad_set')}
+      ${rowE('megaphone','Ad account',_effAccount(job),'account_id')}
+      ${rowE('wallet','Budget',bud.perAd,'budget_amount')}
+      ${rowE('gauge','Spend cap',bud.cap?('$'+bud.cap):'','spend_cap')}
+      ${rowE('calendar-range','Run length',bud.run?(bud.run+' days'):'')}
+      ${rowE('folder','Campaign',campaign)}
+      <div class="dwin"><div class="wk"><i data-lucide="file-text"></i>Ad copy (verbatim) ${_pencil('ad_copy')}${_ovr(h,'ad_copy')?' '+_editedChip:''}</div><div class="wv" style="white-space:pre-wrap;word-break:normal;font-weight:500">${_esc((_effCopy(h)||'').trim())||'—'}</div></div>
+      <div class="audit" style="margin-top:16px"><div class="audit-h"><i data-lucide="history"></i>This ad's edits</div><div id="drawerAudit"><div class="audit-empty">loading…</div></div></div>
     </div>`;
-  $('#drawerWrap').classList.add('show'); icons();
+  $('#drawerWrap').classList.add('show');
+  $('#drawer').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>_editField(b.getAttribute('data-edit'),h,job)));
+  icons();
+  _loadAudit(job.id).then(rows=>{
+    const box=$('#drawerAudit'); if(!box)return; const mine=rows.filter(r=>r.hold_id===h.id||(!r.hold_id));
+    box.innerHTML = mine.length ? mine.map(r=>_auditRowHtml(r,_holdById)).join('') : '<div class="audit-empty">No edits to this ad yet.</div>'; icons();
+  });
 }
 
 // STAGE 3 — SCHEDULE (gated). Reviewed/delivered creatives ready to launch. The Schedule button IS
@@ -1053,12 +1263,12 @@ function viewPipeSchedule(mount){
   v.appendChild(el('<div class="sch-note"><i data-lucide="shield-alert"></i><div><b>Gated — Phase&nbsp;2.</b> Launching to Meta is disabled until the security runbook is cleared (hardened token + <code>META_LAUNCH_ALLOW_LIVE_WRITES=1</code>). The server refuses every launch with <b>403</b> regardless of this screen — the button below is inert by design.</div></div>'));
   if(!ready.length){ v.appendChild(emptyState('rocket','Nothing ready to schedule yet','Delivered creatives from Stage 2 land here, each with its (gated) Schedule button.')); icons(); return; }
   const wrap=el('<div></div>');
-  ready.forEach(h=>{const job=jobById[h.job_id]||{}, bud=_cfgBudget(job.campaign_config), la=h.launch_half||{};
+  ready.forEach(h=>{const job=jobById[h.job_id]||{}, bud=_cfgBudget(_effConfig(job));
     wrap.appendChild(el(`<div class="sch-card">
-      <span class="sc-ad">AD ${_esc(h.ad_number||'—')}</span>
+      <span class="sc-ad">${_esc(_effShort(h,job))}</span>
       <span class="sc-meta"><i data-lucide="video"></i>${_esc(h.video_file||'')}</span>
-      <span class="sc-meta"><i data-lucide="layout-grid"></i>${_esc(la.ad_set||'—')}</span>
-      <span class="sc-meta"><i data-lucide="megaphone"></i>${_esc(job.account_id||'—')}</span>
+      <span class="sc-meta"><i data-lucide="layout-grid"></i>${_esc(_effAdSet(h)||'—')}</span>
+      <span class="sc-meta"><i data-lucide="megaphone"></i>${_esc(_effAccount(job)||'—')}</span>
       <span class="sc-meta"><i data-lucide="wallet"></i>${_esc(bud.perAd)}</span>
       <button class="sch-btn" disabled title="Launch is server-gated until Phase 2"><i data-lucide="lock"></i>Schedule launch · Gated</button>
     </div>`));
