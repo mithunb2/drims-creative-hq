@@ -40,4 +40,12 @@ window.DRIMS_CONFIG = {
   // localStorage keys are namespaced by this so multiple DRIMS tools on the
   // same domain don't collide. Safe to change; changing it logs users out.
   STORAGE_PREFIX: 'drims',
+
+  // --- Launch pipeline UI visibility (Phase 1 ship) ---
+  // Hide the gated launch tabs (Doc→Tasks, Add Automation) on these hostnames until the
+  // Phase-2 security runbook is cleared, so the team doesn't see disabled tabs. This is
+  // VISIBILITY ONLY — the real gate is the SERVER env flag META_LAUNCH_ALLOW_LIVE_WRITES
+  // (launch physically cannot fire without it, regardless of the UI). Previews and
+  // localhost still show the tabs for development. Empty this list to reveal everywhere.
+  LAUNCH_UI_HOSTS_HIDDEN: ['drims-creative-hq.vercel.app'],
 };

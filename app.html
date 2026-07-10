@@ -744,7 +744,20 @@ function viewSplit(){
 
 /* routing */
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b)routeTo(b.dataset.tab);});
+// Launch UI is HIDDEN on production hostnames until Phase 2 (config.js). Visibility only —
+// the server env flag META_LAUNCH_ALLOW_LIVE_WRITES is the real, untouched gate.
+const LAUNCH_UI_HIDDEN=!!(window.DRIMS_CONFIG&&(DRIMS_CONFIG.LAUNCH_UI_HOSTS_HIDDEN||[]).includes(location.hostname));
 function routeTo(tab){
+  if(LAUNCH_UI_HIDDEN) document.querySelectorAll('#nav [data-tab="split"],#nav [data-tab="launch"]').forEach(b=>{b.style.display='none';});
+  if(LAUNCH_UI_HIDDEN&&(tab==='split'||tab==='launch')){
+    location.hash=tab;charts.length=0;
+    document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
+    $('#view').innerHTML='<div class="panel" style="text-align:center;padding:46px 20px;max-width:520px;margin:0 auto">'
+      +'<div class="soon" style="margin:0 auto 12px"><i data-lucide="rocket"></i>Phase 2 — coming</div>'
+      +'<h3 style="margin:0 0 6px">Launch automation is on the way</h3>'
+      +'<p class="ph-sub" style="margin:0 auto">The doc → tasks → launch pipeline unlocks once the security runbook is cleared.</p></div>';
+    icons();return;
+  }
   location.hash=tab;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
