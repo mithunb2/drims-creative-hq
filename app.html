@@ -271,6 +271,11 @@ table.tbl tbody tr:hover{background:var(--bg)}
 .rev-vid .rev-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
 .rev-vid .rv-play,.rev-vid .rv-badge{z-index:1}
 .rev-vid .rv-badge{position:absolute;left:8px;bottom:8px;font-size:10px;font-weight:700;color:#fff;background:rgba(20,22,31,.62);border-radius:6px;padding:2px 7px;display:inline-flex;align-items:center;gap:4px}
+.rev-vid .rv-badge.warn{background:#b45309}
+.rev-vid.noshare{background:repeating-linear-gradient(135deg,#fdf6e7,#fdf6e7 10px,#f8efd8 10px,#f8efd8 20px)}
+.rev-vid.noshare .rv-play{background:rgba(255,255,255,.82);color:#b45309}
+.rev-warn{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;color:#8a5a10;background:#fdf6e7;border:1px solid #f0e2bd;border-radius:9px;padding:7px 9px;margin:2px 0 9px;line-height:1.42}
+.rev-warn [data-lucide]{width:13px;height:13px;flex:0 0 auto;margin-top:1px;color:#b45309}
 .rev-vid .rv-badge [data-lucide]{width:11px;height:11px}
 .rev-vid.wait{cursor:default;background:repeating-linear-gradient(135deg,#f4f5fb,#f4f5fb 10px,#eef0f7 10px,#eef0f7 20px)}
 .rev-vid.wait .rv-play{background:rgba(255,255,255,.7);color:var(--mut2)}
@@ -1237,7 +1242,28 @@ function _setDrive(hid,drive,taskId){
   });
   const thumb=_driveThumb(drive);
   let tsel; try{tsel='[data-thumb-for="'+CSS.escape(hid)+'"]';}catch(e){tsel='[data-thumb-for="'+hid+'"]';}
-  if(thumb) document.querySelectorAll(tsel).forEach(img=>{ img.onload=()=>{img.style.display='block';}; img.onerror=()=>{img.style.display='none';}; img.src=thumb; });
+  if(thumb) document.querySelectorAll(tsel).forEach(img=>{
+    img.onload=()=>{ img.style.display='block'; if(_holdById[hid]) _holdById[hid]._thumbFail=false; };
+    img.onerror=()=>{ img.style.display='none'; _markThumbBlocked(img,hid); };   // org-only / unshared → clear message
+    img.src=thumb;
+  });
+  icons();
+}
+// A Drive thumbnail only loads if the file is reachable by the LOGGED-OUT app (i.e. "Anyone with the
+// link"). Org-only files fail here → tell the buyer exactly why. The play/Open-in-Drive link still
+// works for them (they're signed into the org Google account); only the poster preview is blocked.
+function _markThumbBlocked(img,hid){
+  if(_holdById[hid]) _holdById[hid]._thumbFail=true;
+  const vid=img.closest('.rev-vid');
+  if(vid){ vid.classList.add('noshare');
+    const b=vid.querySelector('.rv-badge'); if(b){ b.className='rv-badge warn'; b.innerHTML='<i data-lucide="lock"></i>not shared'; }
+    vid.title="Preview blocked — this video is shared org-only. Ask the editor to set “Anyone with the link”, or click to open it in Drive (works when you’re signed into the org account).";
+  }
+  const card=img.closest('.rev-card');
+  if(card && !card.querySelector('.rev-warn')){
+    const w=el('<div class="rev-warn"><i data-lucide="alert-triangle"></i><span>Preview unavailable — this video is shared <b>org-only</b>. Ask the editor to set <b>“Anyone with the link”</b>, or use <b>Open in Drive</b> (works when you’re signed into the org Google account).</span></div>');
+    const specs=card.querySelector('.rev-specs'); if(specs) specs.after(w); else (card.querySelector('.rev-body')||card).prepend(w);
+  }
   icons();
 }
 
@@ -1249,13 +1275,14 @@ function _openHoldReview(hid){
   _openHoldId=hid;
   const job=(_pipeData.jobs||[]).find(j=>j.id===h.job_id)||{};
   const la=h.launch_half||{}, bud=_cfgBudget(_effConfig(job)), delivered=!!h.promoted_at;
-  const drive=h._drive||h.drive_link||'', embed=_driveEmbed(drive);
+  const drive=h._drive||h.drive_link||'', embed=_driveEmbed(drive), blocked=!!h._thumbFail;
   const taskUrl=h.clickup_task_id?('https://app.clickup.com/t/'+_esc(h.clickup_task_id)):'';
   const openUrl=drive||taskUrl;
   const campaign=(la.tokens&&la.tokens.campaign_label)||(job.campaign_config&&(job.campaign_config['Campaign Name']||job.campaign_config['Campaign']))||'';
   const rowE=(ic,k,val,field)=>`<div class="drow"><span class="dk"><i data-lucide="${ic}"></i>${k}</span><span class="dv${val?'':' muted'}">${val?_esc(val):'—'}${field?' '+_pencil(field):''}${field&&_ovrF(field,h,job)?' '+_editedChip:''}</span></div>`;
-  const player = delivered&&embed
-    ? `<div style="border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;aspect-ratio:16/9;background:#000"><iframe src="${embed}" style="width:100%;height:100%;border:0" allow="autoplay" allowfullscreen></iframe></div>` : '';
+  const player = delivered&&embed&&!blocked
+    ? `<div style="border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;aspect-ratio:16/9;background:#000"><iframe src="${embed}" style="width:100%;height:100%;border:0" allow="autoplay" allowfullscreen></iframe></div>`
+    : (delivered&&blocked ? `<div class="rev-warn" style="margin-bottom:14px"><i data-lucide="alert-triangle"></i><span>Inline preview blocked — this video is shared <b>org-only</b>. Use <b>Open in Drive</b> below (works when you’re signed into the org account), or ask the editor to set <b>“Anyone with the link”</b>.</span></div>` : '');
   $('#drawer').innerHTML=`
     <div class="dh"><div class="dt"><div class="dnm">${_esc(_effShort(h,job))}</div>
       <div class="dsub"><i data-lucide="store" style="width:14px;height:14px"></i>${_esc(job.store_name||job.store_slug||'—')} · AD ${_esc(h.ad_number||'—')} · ${_esc(h.video_file||'')}</div></div>
