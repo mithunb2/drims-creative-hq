@@ -25,7 +25,8 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em}
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em;overflow-x:clip}
+img,video,canvas{max-width:100%}
 a{color:var(--indigo);text-decoration:none}
 .hide{display:none!important}
 [data-lucide]{width:16px;height:16px;stroke-width:2}
@@ -163,7 +164,7 @@ table.tbl tbody tr:hover{background:var(--bg)}
 .handoff-tag{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;
   font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 8px;border-radius:6px;white-space:nowrap}
 
-.cc{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.cc{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;margin-bottom:18px}
 .ccbox{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
 .cchead{display:flex;align-items:center;gap:10px;padding:15px 17px;border-bottom:1px solid var(--line)}
 .cchead .ci{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto}
@@ -305,11 +306,25 @@ table.tbl tbody tr:hover{background:var(--bg)}
   .charts{grid-template-columns:1fr}
   main{padding:16px 14px}
   .topbar{padding:10px 14px}.topbar .who .em{display:none}
-  table.tbl{min-width:620px}.rankrow .nm{width:96px}
+  table.tbl{min-width:620px;display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}.rankrow .nm{width:96px}
   .nav{position:sticky;bottom:0;top:auto;order:9;border-top:1px solid var(--line);border-bottom:0;
-    padding:6px 6px env(safe-area-inset-bottom);justify-content:space-between}
-  .nav button{flex:1;flex-direction:column;gap:3px;font-size:10.5px;padding:7px 2px;border-bottom:0;margin-bottom:0}
-  .nav button.active{border-bottom:0}
+    padding:6px 8px calc(6px + env(safe-area-inset-bottom));gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .nav button{flex:0 0 auto;min-width:64px;min-height:52px;flex-direction:column;gap:4px;font-size:10.5px;
+    padding:7px 6px;border-bottom:0;margin-bottom:0;border-radius:10px}
+  .nav button.active{border-bottom:0;background:var(--accent-soft);color:var(--accent-ink)}
+}
+
+/* ---- Mobile: touch targets + tighter spacing (foundation, inherited by every view) ---- */
+@media(max-width:600px){
+  main{padding:16px 12px}
+  .kpi{padding:17px}.kpi .n{font-size:25px}
+  .fstage .fn{font-size:20px}.cchead .cnum{font-size:21px}
+  .iconbtn{min-width:40px;min-height:40px}
+  .btn,.btn-ghost,.gs-actions .btn{min-height:44px}
+  .storrow{min-height:44px}
+  .trow,.htitem{min-height:42px}
+  .tchip,.mchip{padding:4px 9px}
+  .drawer{width:100%}
 }
 </style>
 </head>
