@@ -214,6 +214,37 @@ table.tbl tbody tr:hover{background:var(--bg)}
 .htitem .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .htmore{font-size:11px;color:var(--mut);margin-top:6px;font-weight:600}
 
+/* ── Unified Launch Pipeline (stage rail + segmented control + read-only Stage 2) ── */
+.pl-rail{display:grid;grid-template-columns:repeat(3,1fr);background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+.pl-stage{text-align:left;border:0;border-right:1px solid var(--line2);background:none;font-family:inherit;padding:15px 16px;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:background .12s;min-height:112px}
+.pl-stage:last-child{border-right:0}
+.pl-stage:hover{background:var(--bg)}.pl-stage.on{background:var(--accent-soft)}
+.pl-stop{display:flex;align-items:center;gap:9px}
+.pl-ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-ink);flex:0 0 auto}
+.pl-ic [data-lucide]{width:16px;height:16px}
+.pl-stage.gated .pl-ic{background:#f8f1e4;color:#a86a09;border:1px solid #ecdcae}
+.pl-sn{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:var(--mut2);font-weight:700}
+.pl-st{font-weight:700;font-size:14px;letter-spacing:-.01em;color:var(--ink)}
+.pl-ss{font-size:11.5px;color:var(--mut);line-height:1.35}
+.pl-foot{margin-top:auto;display:flex;align-items:baseline;gap:6px}
+.pl-n{font-size:20px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.pl-nl{font-size:11px;color:var(--mut);font-weight:600}
+.pl-lock{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#a86a09;background:#f8f1e4;border:1px solid #ecdcae;border-radius:999px;padding:3px 9px}
+.pl-lock [data-lucide]{width:12px;height:12px}
+.pl-seg{display:flex;gap:4px;background:var(--line2);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:16px}
+.pl-seg button{flex:1;border:0;background:none;font-family:inherit;font-size:13px;font-weight:650;color:var(--mut);padding:10px;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.pl-seg button .pl-num{font-family:ui-monospace,Menlo,monospace;font-size:11px;opacity:.7}
+.pl-seg button [data-lucide]{width:13px;height:13px}
+.pl-seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.pl-rows{margin-top:12px;display:flex;flex-direction:column}
+.pl-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid var(--line2);font-size:12.5px}
+.pl-row:first-child{border-top:0}
+.pl-ad{font-weight:700;color:var(--ink2);flex:0 0 auto}
+.pl-vid{color:var(--mut);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-link{font-size:11.5px;font-weight:600;color:var(--accent);flex:0 0 auto}
+@media(max-width:760px){.pl-rail{grid-template-columns:1fr}.pl-stage{border-right:0;border-bottom:1px solid var(--line2);min-height:0}.pl-stage:last-child{border-bottom:0}}
+@media(max-width:560px){.pl-seg{flex-direction:column}.pl-seg button{min-height:44px}}
+
 /* detail drawer */
 #drawerWrap{position:fixed;inset:0;z-index:60;display:none}
 #drawerWrap.show{display:block}
@@ -359,8 +390,7 @@ table.tbl tbody tr:hover{background:var(--bg)}
     <button data-tab="team"><i data-lucide="users"></i>Team</button>
     <button data-tab="workload"><i data-lucide="gauge"></i>Live</button>
     <button data-tab="performance"><i data-lucide="bar-chart-3"></i>Performance</button>
-    <button data-tab="split"><i data-lucide="split"></i>Doc → Tasks</button>
-    <button data-tab="launch"><i data-lucide="rocket"></i>Add Automation</button>
+    <button data-tab="pipeline"><i data-lucide="split"></i>Launch Pipeline</button>
   </nav>
   <main>
     <div class="stalebar" id="staleBar"><i data-lucide="alert-triangle"></i><span id="staleMsg"></span></div>
@@ -602,8 +632,8 @@ async function _lsubmit(){
   }catch(err){ alert('submit blocked: '+(err.message||err)); }
 }
 
-function viewLaunch(){
-  const v=$('#view'); v.innerHTML='';
+function viewLaunch(mount){
+  const v=mount||$('#view'); v.innerHTML='';
   v.appendChild(el(`<div><div class="panel">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i data-lucide="rocket"></i><h2 style="margin:0">Add Automation — Meta Launch</h2></div>
     <div class="muted" style="font-size:13px;margin-bottom:14px">Upload a launch doc (.docx) → parse → budget + safety preview. <b>Tokenless preview only</b>: no Meta connection, launch disabled behind the security gate.</div>
@@ -717,8 +747,8 @@ async function _scommit(split){
   }
 }
 
-function viewSplit(){
-  const v=$('#view'); v.innerHTML='';
+function viewSplit(mount){
+  const v=mount||$('#view'); v.innerHTML='';
   v.appendChild(el(`<div><div class="panel">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i data-lucide="split"></i><h2 style="margin:0">Doc → Tasks</h2></div>
     <div class="muted" style="font-size:13px;margin-bottom:14px">Upload one dual-half doc (N scripts, each with its ad copy + launch data below it). It splits into <b>N Creative Pipeline tasks</b> for the editor named in the doc. Launch data is held for the Drive-link → Production step. <b>Tokenless</b>: no Meta contact.</div>
@@ -747,9 +777,11 @@ $('#nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b)r
 // Launch UI is HIDDEN on production hostnames until Phase 2 (config.js). Visibility only —
 // the server env flag META_LAUNCH_ALLOW_LIVE_WRITES is the real, untouched gate.
 const LAUNCH_UI_HIDDEN=!!(window.DRIMS_CONFIG&&(DRIMS_CONFIG.LAUNCH_UI_HOSTS_HIDDEN||[]).includes(location.hostname));
+let _pipeStage=1;   // which Launch-Pipeline stage to open (1=Upload&Split · 2=In Production · 3=Review&Launch)
 function routeTo(tab){
-  if(LAUNCH_UI_HIDDEN) document.querySelectorAll('#nav [data-tab="split"],#nav [data-tab="launch"]').forEach(b=>{b.style.display='none';});
-  if(LAUNCH_UI_HIDDEN&&(tab==='split'||tab==='launch')){
+  if(tab==='split'){tab='pipeline';_pipeStage=1;} else if(tab==='launch'){tab='pipeline';_pipeStage=3;}  // old links → unified view
+  if(LAUNCH_UI_HIDDEN) document.querySelectorAll('#nav [data-tab="pipeline"]').forEach(b=>{b.style.display='none';});
+  if(LAUNCH_UI_HIDDEN&&tab==='pipeline'){
     location.hash=tab;charts.length=0;
     document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
     $('#view').innerHTML='<div class="panel" style="text-align:center;padding:46px 20px;max-width:520px;margin:0 auto">'
@@ -761,7 +793,81 @@ function routeTo(tab){
   location.hash=tab;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
-  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,split:viewSplit,launch:viewLaunch}[tab]||viewOverview)();
+  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,pipeline:viewPipeline}[tab]||viewOverview)();
+  icons();
+}
+
+/* ── Unified Launch Pipeline: ONE view, 3 sequential stages. Stage 1 & 3 REUSE the existing
+   split/launch views verbatim (mounted into #stageMount — only where they render changes). Stage 2
+   is a READ-ONLY reflection of launch_holds (the pipeline's single source of truth): SELECT-only,
+   no writes, no launch-API contact, no gate involvement. ─────────────────────────────────────── */
+let _pipeData={jobs:[],holds:[]};
+async function viewPipeline(){
+  const v=$('#view'); v.innerHTML=''; charts.length=0;
+  const [jobs,holds]=await Promise.all([safe('launch_jobs'),safe('launch_holds')]);   // READ-ONLY
+  _pipeData={jobs,holds};
+  const inPipe=holds.filter(h=>h.clickup_task_id&&!h.promoted_at).length;
+  const promoted=holds.filter(h=>h.promoted_at).length;
+  const njobs=jobs.length;
+  const stage=(n,ic,t,sub,foot,cls)=>`<button class="pl-stage${cls?' '+cls:''}" data-stage="${n}">
+    <div class="pl-stop"><span class="pl-ic"><i data-lucide="${ic}"></i></span><span class="pl-sn">STAGE ${n}</span></div>
+    <div class="pl-st">${t}</div><div class="pl-ss">${sub}</div><div class="pl-foot">${foot}</div></button>`;
+  v.appendChild(el(`<div class="panel-h" style="margin-bottom:4px"><i data-lucide="split"></i><h3>Launch Pipeline</h3></div>`));
+  v.appendChild(el(`<p class="ph-sub" style="margin:0 0 14px">One doc → tasks → editor delivers → Production → launch. Phase&nbsp;1 live; the launch step is server-gated.</p>`));
+  v.appendChild(el(`<div class="pl-rail">
+    ${stage(1,'file-up','Upload &amp; Split','Doc → N tasks',`<span class="pl-n">${njobs}</span><span class="pl-nl">job${njobs===1?'':'s'}</span>`)}
+    ${stage(2,'list-checks','In Production','Editors deliver → Production',`<span class="pl-n">${inPipe}</span><span class="pl-nl">in flight · ${promoted} promoted</span>`)}
+    ${stage(3,'rocket','Review &amp; Launch','Meta launch','<span class="pl-lock"><i data-lucide="lock"></i>Gated</span>','gated')}
+  </div>`));
+  v.appendChild(el(`<div class="pl-seg">
+    <button data-stage="1"><span class="pl-num">1</span>Upload &amp; Split</button>
+    <button data-stage="2"><span class="pl-num">2</span>In Production</button>
+    <button data-stage="3"><span class="pl-num">3</span>Review &amp; Launch <i data-lucide="lock"></i></button></div>`));
+  v.appendChild(el('<div id="stageMount"></div>'));
+  const go=e=>{const b=e.target.closest('[data-stage]'); if(b) mountStage(+b.dataset.stage);};
+  v.querySelector('.pl-seg').addEventListener('click',go);
+  v.querySelector('.pl-rail').addEventListener('click',go);
+  mountStage(_pipeStage);
+  icons();
+}
+function mountStage(n){
+  _pipeStage=n;
+  document.querySelectorAll('.pl-seg button,.pl-rail .pl-stage').forEach(b=>b.classList.toggle('on',+b.dataset.stage===n));
+  const mount=$('#stageMount');
+  if(n===1) viewSplit(mount);            // existing Doc→Tasks view, mounted here
+  else if(n===2) viewPipeStatus(mount);  // NEW read-only status mirror
+  else viewLaunch(mount);                // existing Review&Launch view (server-gated), mounted here
+  icons();
+}
+// STAGE 2 — read-only status mirror. SELECT-only over launch_holds; renders state + outbound
+// ClickUp links (where editors paste Drive links). Introduces NO write path, never calls the
+// launch API, never touches a gate. A mirror, not a control surface.
+function viewPipeStatus(mount){
+  const v=mount||$('#view'); v.innerHTML='';
+  const {jobs,holds}=_pipeData;
+  if(!holds.length){ v.appendChild(emptyState('inbox','Nothing in production yet','Commit a split doc in Stage 1 — its tasks appear here as they move through Production.')); icons(); return; }
+  const jobById={}; jobs.forEach(j=>{jobById[j.id]=j;});
+  const byJob={}; holds.forEach(h=>{(byJob[h.job_id]||(byJob[h.job_id]=[])).push(h);});
+  const stOf=h=> h.promoted_at ? {l:'Promoted',c:'win'} : h.clickup_task_id ? {l:'Awaiting Drive link',c:''} : {l:'Queued',c:''};
+  v.appendChild(el('<p class="ph-sub" style="margin:0 0 12px;display:flex;align-items:center;gap:6px"><i data-lucide="eye"></i>Read-only mirror — editors paste Drive links on the ClickUp task; this reflects it. No actions here.</p>'));
+  const grid=el('<div class="grid"></div>');
+  Object.keys(byJob).forEach(jid=>{
+    const hs=byJob[jid].slice().sort((a,b)=>(a.entry_index||0)-(b.entry_index||0));
+    const job=jobById[jid]||{}, done=hs.filter(h=>h.promoted_at).length;
+    const rows=hs.map(h=>{const s=stOf(h);
+      const task=h.clickup_task_id?`<a href="https://app.clickup.com/t/${_esc(h.clickup_task_id)}" target="_blank" rel="noopener" class="pl-link">task</a>`:'';
+      const prod=h.production_task_id?`<a href="https://app.clickup.com/t/${_esc(h.production_task_id)}" target="_blank" rel="noopener" class="pl-link">prod</a>`:'';
+      return `<div class="pl-row"><span class="pl-ad mono">AD ${_esc(h.ad_number||'—')}</span>`
+        +`<span class="pl-vid" title="${_esc(h.video_file||'')}">${_esc(h.video_file||'')}${h.test_label?' · '+_esc(h.test_label):''}</span>`
+        +`<span class="tag ${s.c}" style="margin-left:auto">${s.l}</span>${task}${prod}</div>`;
+    }).join('');
+    grid.appendChild(el(`<div class="scard">
+      <div class="nm">${_esc(job.store_name||job.store_slug||'—')}<span class="pill">${done}/${hs.length} in prod</span></div>
+      <div class="tags"><span class="tag"><i data-lucide="file-text"></i>${_esc(job.source_filename||'doc')}</span>`
+        +`${job.editor_name?`<span class="tag"><i data-lucide="user"></i>${_esc(job.editor_name)}</span>`:''}</div>
+      <div class="pl-rows">${rows}</div></div>`));
+  });
+  v.appendChild(grid);
   icons();
 }
 
