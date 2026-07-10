@@ -307,7 +307,7 @@ table.tbl tbody tr:hover{background:var(--bg)}
   .charts{grid-template-columns:1fr}
   main{padding:16px 14px}
   .topbar{padding:10px 14px}.topbar .who .em{display:none}
-  table.tbl{min-width:620px;display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}.rankrow .nm{width:96px}
+  table.tbl,.ptbl{min-width:620px;display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}.rankrow .nm{width:96px}
   .nav{position:sticky;bottom:0;top:auto;order:9;border-top:1px solid var(--line);border-bottom:0;
     padding:6px 8px calc(6px + env(safe-area-inset-bottom));gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .nav button{flex:0 0 auto;min-width:64px;min-height:52px;flex-direction:column;gap:4px;font-size:10.5px;
@@ -1703,21 +1703,21 @@ async function renderPerformance(){
 
   if(!document.getElementById('perfcss')){document.head.appendChild(el(`<style id="perfcss">
    .perfbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:2px 0 14px}
-   .perfpresets{display:inline-flex;gap:5px;background:#f1f5f9;padding:4px;border-radius:10px}
-   .perfpreset{padding:7px 14px;border:none;background:transparent;color:#475569;font-weight:700;font-size:12.5px;border-radius:7px;cursor:pointer}
-   .perfpreset:hover{background:#e2e8f0}.perfpreset.on{background:#4f46e5;color:#fff}
+   .perfpresets{display:inline-flex;gap:5px;background:var(--line2);padding:4px;border-radius:10px}
+   .perfpreset{padding:7px 14px;border:none;background:transparent;color:var(--mut);font-weight:700;font-size:12.5px;border-radius:7px;cursor:pointer}
+   .perfpreset:hover{background:var(--line)}.perfpreset.on{background:var(--accent);color:#fff}
    .perfcustom{display:inline-flex;align-items:center;gap:8px;color:var(--mut);font-size:13px}.perfcustom.hide{display:none}
-   .perfdate{padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;font-weight:600;color:#1f2937}
-   .perfrange{margin-left:auto;font-size:12.5px;color:var(--mut);display:inline-flex;align-items:center;gap:7px}.perfrange b{color:#1f2937}
-   .perfnote{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:11px 14px;font-size:12.5px;line-height:1.55;margin-bottom:14px}.perfnote b{font-weight:800}
-   .ptbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-   .ptbl thead th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:10px 14px;background:#f8fafc;border-bottom:1px solid var(--line);white-space:nowrap}
+   .perfdate{padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;font-weight:600;color:var(--ink)}
+   .perfrange{margin-left:auto;font-size:12.5px;color:var(--mut);display:inline-flex;align-items:center;gap:7px}.perfrange b{color:var(--ink)}
+   .perfnote{background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-ink);border-radius:12px;padding:11px 14px;font-size:12.5px;line-height:1.55;margin-bottom:14px}.perfnote b{font-weight:800}
+   .ptbl{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+   .ptbl thead th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:10px 14px;background:var(--line2);border-bottom:1px solid var(--line);white-space:nowrap}
    .ptbl thead th.num,.ptbl td.num{text-align:center}
-   .ptbl thead th.pend{color:#94a3b8}
+   .ptbl thead th.pend{color:var(--mut2)}
    .ptbl tbody td{padding:12px 14px;border-bottom:1px solid var(--line2);vertical-align:middle}
-   .ptbl tbody tr:last-child td{border-bottom:none}.ptbl tbody tr:hover{background:#f1f5f9}
-   .pname{font-weight:800;font-size:14.5px;color:#1f2937}
-   .pn{font-size:15px;font-weight:800;color:#1f2937}.pn small{font-size:10px;font-weight:600;color:var(--mut)}.pn.zero{color:#cbd5e1;font-weight:600}
+   .ptbl tbody tr:last-child td{border-bottom:none}.ptbl tbody tr:hover{background:var(--line2)}
+   .pname{font-weight:800;font-size:14.5px;color:var(--ink)}
+   .pn{font-size:15px;font-weight:800;color:var(--ink)}.pn small{font-size:10px;font-weight:600;color:var(--mut)}.pn.zero{color:var(--mut2);font-weight:600}
    .pfoot{font-size:11px;color:var(--mut);margin-top:11px;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
   </style>`));}
 
