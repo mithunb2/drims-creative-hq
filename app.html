@@ -245,6 +245,70 @@ table.tbl tbody tr:hover{background:var(--bg)}
 @media(max-width:760px){.pl-rail{grid-template-columns:1fr}.pl-stage{border-right:0;border-bottom:1px solid var(--line2);min-height:0}.pl-stage:last-child{border-bottom:0}}
 @media(max-width:560px){.pl-seg{flex-direction:column}.pl-seg button{min-height:44px}}
 
+/* Stage 1 — committed state (replaces the commit button after a successful commit) */
+.pl-committed{display:flex;align-items:flex-start;gap:12px;background:#f0fbf4;border:1px solid #cdeede;border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px}
+.pl-committed .cc-ic{width:34px;height:34px;flex:0 0 auto;border-radius:10px;display:grid;place-items:center;background:#dff4e6;color:#15803d}
+.pl-committed .cc-ic [data-lucide]{width:18px;height:18px}
+.pl-committed .cc-t{font-weight:700;font-size:14.5px;color:var(--ink);display:flex;align-items:center;gap:8px}
+.pl-committed .cc-lock{font-size:10.5px;font-weight:700;color:var(--mut);background:var(--line2);border:1px solid var(--line);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
+.pl-committed .cc-lock [data-lucide]{width:11px;height:11px}
+.pl-committed .cc-s{font-size:12.5px;color:var(--mut);margin-top:3px}
+.pl-committed .cc-s b{color:var(--ink2)}
+
+/* Stage 2 — review & QA surface */
+.rev-job{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:14px}
+.rev-jobh{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 12px;padding-bottom:14px;margin-bottom:14px;border-bottom:1px solid var(--line2)}
+.rev-jobh .rj-nm{font-weight:800;font-size:15px;letter-spacing:-.01em;color:var(--ink)}
+.rev-jobh .rj-meta{font-size:12px;color:var(--mut);display:inline-flex;align-items:center;gap:6px}
+.rev-jobh .rj-meta [data-lucide]{width:13px;height:13px}
+.rev-jobh .rj-prog{margin-left:auto;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink)}
+.rev-card{display:flex;gap:14px;padding:14px 0;border-top:1px solid var(--line2)}
+.rev-card:first-of-type{border-top:0}
+.rev-vid{flex:0 0 172px;width:172px;aspect-ratio:16/10;border-radius:12px;overflow:hidden;position:relative;background:linear-gradient(135deg,#eef0f7,#e5e7f2);border:1px solid var(--line);display:grid;place-items:center;text-decoration:none}
+.rev-vid .rv-play{width:44px;height:44px;border-radius:999px;background:rgba(255,255,255,.92);display:grid;place-items:center;color:var(--indigo);box-shadow:0 2px 10px rgba(20,22,31,.14);transition:transform .14s}
+.rev-vid:hover .rv-play{transform:scale(1.08)}
+.rev-vid .rv-play [data-lucide]{width:20px;height:20px}
+.rev-vid .rv-badge{position:absolute;left:8px;bottom:8px;font-size:10px;font-weight:700;color:#fff;background:rgba(20,22,31,.62);border-radius:6px;padding:2px 7px;display:inline-flex;align-items:center;gap:4px}
+.rev-vid .rv-badge [data-lucide]{width:11px;height:11px}
+.rev-vid.wait{cursor:default;background:repeating-linear-gradient(135deg,#f4f5fb,#f4f5fb 10px,#eef0f7 10px,#eef0f7 20px)}
+.rev-vid.wait .rv-play{background:rgba(255,255,255,.7);color:var(--mut2)}
+.rev-body{flex:1;min-width:0}
+.rev-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.rev-ad{font-weight:700;font-size:13.5px;color:var(--ink2)}
+.rev-file{font-size:12px;color:var(--mut);font-family:ui-monospace,Menlo,monospace}
+.rev-dot{margin-left:auto;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px}
+.rev-dot.ok{background:#f0fbf4;color:#15803d}
+.rev-dot.wait{background:#fff8ec;color:#b45309}
+.rev-dot i{width:7px;height:7px;border-radius:999px;background:currentColor;display:inline-block}
+.rev-specs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;margin:10px 0 8px}
+.rev-spec{display:flex;align-items:baseline;gap:7px;font-size:12.5px;min-width:0}
+.rev-spec .rs-k{color:var(--mut);font-weight:600;flex:0 0 auto;display:inline-flex;align-items:center;gap:5px}
+.rev-spec .rs-k [data-lucide]{width:13px;height:13px}
+.rev-spec .rs-v{color:var(--ink2);font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rev-spec .rs-v.mono{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.rev-copy{font-size:12.5px;color:var(--ink2);line-height:1.5;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:9px 11px;margin:2px 0 10px;max-height:66px;overflow:hidden;position:relative;white-space:pre-wrap;word-break:break-word}
+.rev-copy.clamp::after{content:"";position:absolute;left:0;right:0;bottom:0;height:22px;background:linear-gradient(transparent,var(--bg))}
+.rev-actions{display:flex;flex-wrap:wrap;gap:8px}
+.rev-btn{font-size:12px;font-weight:650;padding:7px 12px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink2);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.rev-btn:hover{border-color:#d9dcee;background:var(--bg)}
+.rev-btn [data-lucide]{width:13px;height:13px}
+.rev-btn.prim{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.rev-btn.prim:hover{background:var(--indigo-d)}
+.rev-note{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mut);background:var(--accent-soft);border:1px solid #e4e2f7;border-radius:10px;padding:9px 12px;margin-bottom:12px}
+.rev-note [data-lucide]{width:15px;height:15px;color:var(--accent-ink)}
+@media(max-width:640px){.rev-card{flex-direction:column}.rev-vid{flex-basis:auto;width:100%}.rev-specs{grid-template-columns:1fr}}
+
+/* Stage 3 — gated schedule surface */
+.sch-note{display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:#8a5a10;background:#fdf6e7;border:1px solid #f0e2bd;border-radius:12px;padding:11px 13px;margin-bottom:14px}
+.sch-note [data-lucide]{width:16px;height:16px;flex:0 0 auto;margin-top:1px;color:#b45309}
+.sch-card{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:13px 15px;margin-bottom:10px}
+.sch-card .sc-ad{font-weight:700;font-size:13px;color:var(--ink2)}
+.sch-card .sc-meta{font-size:12px;color:var(--mut);display:inline-flex;align-items:center;gap:6px}
+.sch-card .sc-meta [data-lucide]{width:13px;height:13px}
+.sch-btn{margin-left:auto;font-size:12.5px;font-weight:700;padding:9px 15px;border-radius:10px;border:1px solid #ecdcae;background:#f8f1e4;color:#a86a09;cursor:not-allowed;display:inline-flex;align-items:center;gap:7px;opacity:1}
+.sch-btn [data-lucide]{width:14px;height:14px}
+@media(max-width:560px){.sch-btn{margin-left:0;width:100%;justify-content:center}}
+
 /* detail drawer */
 #drawerWrap{position:fixed;inset:0;z-index:60;display:none}
 #drawerWrap.show{display:block}
@@ -658,7 +722,7 @@ function viewLaunch(mount){
 }
 
 /* ── Doc → Tasks — dual-half split intake (Phase 1, tokenless; writes a split-job to Supabase) ──── */
-let _sstate={split:null,fileName:''};
+let _sstate={split:null,fileName:'',committed:null};   // committed={jobId,count} once queued — blocks re-commit
 
 async function _shandleFile(file){
   const errB=$('#sErr'),nameB=$('#sFileName');
@@ -672,7 +736,7 @@ async function _shandleFile(file){
     const r=await fetch('/api/launch-split',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(extracted)});
     const j=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error([j.error,j.detail].filter(Boolean).join(' — ')||('split failed (HTTP '+r.status+')'));
-    _sstate.split=j.split; _sstate.fileName=file.name;
+    _sstate.split=j.split; _sstate.fileName=file.name; _sstate.committed=null;   // fresh doc → re-arm commit
     nameB.textContent=file.name+' — '+j.split.count+' entr'+(j.split.count===1?'y':'ies')+' parsed ✓';
     _srender(j.split);
   }catch(err){
@@ -713,12 +777,18 @@ function _srender(split){
     </div>
     ${blk}${warn}
     ${entries}
-    <div class="panel" style="border:1px solid ${canCommit?'#30a46c':'#e5484d'}">
-      <button id="sCommit" ${canCommit?'':'disabled'} style="padding:10px 18px;border-radius:8px;border:none;font-weight:700;cursor:${canCommit?'pointer':'not-allowed'};background:${canCommit?'#30a46c':'#3a3a3a'};color:${canCommit?'#fff':'#888'}">Commit split job → queue ${split.count} task${split.count===1?'':'s'}</button>
-      <span style="margin-left:12px;font-size:13px;color:${canCommit?'#30a46c':'#e5484d'}">${canCommit?'writes launch_jobs + launch_holds; the intake worker fans out the tasks':'resolve blockers first'}</span>
-      <div id="sResult" style="margin-top:10px"></div>
-    </div>`;
-  const cb=$('#sCommit'); if(cb) cb.addEventListener('click',()=>_scommit(split));
+    ${_sstate.committed
+      ? `<div class="pl-committed">
+           <span class="cc-ic"><i data-lucide="check"></i></span>
+           <div><div class="cc-t">Committed — job queued <span class="cc-lock"><i data-lucide="lock"></i>locked</span></div>
+             <div class="cc-s"><b>${_sstate.committed.count}</b> task${_sstate.committed.count===1?'':'s'} handed to the intake worker · job <code>${_esc(String(_sstate.committed.jobId).slice(0,8))}</code>. Track them in <b>Stage&nbsp;2 · In Production</b> →</div></div>
+         </div>`
+      : `<div class="panel" style="padding:16px 18px;border:1px solid ${canCommit?'#cdeede':'#f0d3d3'}">
+           <button id="sCommit" ${canCommit?'':'disabled'} class="rev-btn prim" style="width:auto;font-size:13px;padding:10px 16px;${canCommit?'':'opacity:.55;cursor:not-allowed'}"><i data-lucide="git-commit-horizontal"></i>Commit split job → queue ${split.count} task${split.count===1?'':'s'}</button>
+           <span style="margin-left:12px;font-size:12.5px;color:var(--mut)">${canCommit?'writes launch_jobs + launch_holds; the intake worker fans out the tasks':'resolve blockers first'}</span>
+           <div id="sResult" style="margin-top:10px;font-size:13px"></div>
+         </div>`}`;
+  const cb=$('#sCommit'); if(cb&&!_sstate.committed) cb.addEventListener('click',()=>_scommit(split));
   icons();
 }
 
@@ -739,10 +809,10 @@ async function _scommit(split){
       video_file:e.video_file, test_label:e.test_label, script_half:e.script, launch_half:e.launch_half}));
     const { error:he } = await sb.from('launch_holds').insert(holds);
     if(he) throw new Error('holds insert: '+he.message);
-    out.innerHTML='<div style="color:#30a46c">✓ Committed job '+job.id+' — '+split.count+' task(s) queued. The intake worker will create them on the Mac Mini.</div>';
-    btn.textContent='Committed ✓';
+    _sstate.committed={jobId:job.id,count:split.count};   // lock the button — no accidental re-commit
+    _srender(split);                                       // re-render into the committed state
   }catch(err){
-    out.innerHTML='<div style="color:#e5484d">Commit failed: '+_esc(err.message||err)+'</div>';
+    out.innerHTML='<div style="color:var(--red,#dc2626)">Commit failed: '+_esc(err.message||err)+'</div>';
     btn.disabled=false; btn.textContent='Commit split job';
   }
 }
@@ -816,7 +886,7 @@ async function viewPipeline(){
   v.appendChild(el(`<p class="ph-sub" style="margin:0 0 14px">One doc → tasks → editor delivers → Production → launch. Phase&nbsp;1 live; the launch step is server-gated.</p>`));
   v.appendChild(el(`<div class="pl-rail">
     ${stage(1,'file-up','Upload &amp; Split','Doc → N tasks',`<span class="pl-n">${njobs}</span><span class="pl-nl">job${njobs===1?'':'s'}</span>`)}
-    ${stage(2,'list-checks','In Production','Editors deliver → Production',`<span class="pl-n">${inPipe}</span><span class="pl-nl">in flight · ${promoted} promoted</span>`)}
+    ${stage(2,'list-checks','In Production','Review delivered creatives',`<span class="pl-n">${inPipe}</span><span class="pl-nl">in flight · ${promoted} delivered</span>`)}
     ${stage(3,'rocket','Review &amp; Launch','Meta launch','<span class="pl-lock"><i data-lucide="lock"></i>Gated</span>','gated')}
   </div>`));
   v.appendChild(el(`<div class="pl-seg">
@@ -835,39 +905,166 @@ function mountStage(n){
   document.querySelectorAll('.pl-seg button,.pl-rail .pl-stage').forEach(b=>b.classList.toggle('on',+b.dataset.stage===n));
   const mount=$('#stageMount');
   if(n===1) viewSplit(mount);            // existing Doc→Tasks view, mounted here
-  else if(n===2) viewPipeStatus(mount);  // NEW read-only status mirror
-  else viewLaunch(mount);                // existing Review&Launch view (server-gated), mounted here
+  else if(n===2) viewPipeStatus(mount);  // review & QA surface (read-only)
+  else viewPipeSchedule(mount);          // gated Schedule surface (server-gated launch)
   icons();
 }
-// STAGE 2 — read-only status mirror. SELECT-only over launch_holds; renders state + outbound
-// ClickUp links (where editors paste Drive links). Introduces NO write path, never calls the
-// launch API, never touches a gate. A mirror, not a control surface.
+// STAGE 2 — REVIEW & QA surface. Read-only: SELECT over launch_holds/launch_jobs + a read-only
+// ClickUp GET (the buyer's OWN token, via the existing /api/clickup proxy) to fetch each delivered
+// creative's Drive URL. It introduces NO write path, never calls the launch API, never touches a
+// gate. The buyer double-checks the video, the HELD ad copy (reused, not regenerated), budget, ad
+// account, ad set and ad name — then schedules in Stage 3.
+const _holdById={};
+function _cfgBudget(cfg){cfg=cfg||{};
+  const amt=cfg['Budget Amount (USD)'], typ=(cfg['Budget Type']||'').trim(),
+        cap=cfg['Launch Spend Cap (USD)'], run=cfg['Run Length (days)'];
+  const has=v=>v!=null&&String(v).trim()!=='';
+  return {amt,typ,cap,run,
+    perAd: has(amt)?('$'+amt+'/day'+(typ?(' · '+typ):'')):'—',
+    summary:[has(amt)?('$'+amt+'/day'):null, has(cap)?('cap $'+cap):null, has(run)?(run+'d run'):null].filter(Boolean).join(' · ')};
+}
+function _adSetLabel(la){return [la.ad_set, la.ad_set_name].filter(Boolean).join(' · ')||(la.ad_set||'');}
+function _adName(la){return la.name_string||(la.tokens&&(la.tokens.ad_name||la.tokens.name))||'';}
+
 function viewPipeStatus(mount){
   const v=mount||$('#view'); v.innerHTML='';
   const {jobs,holds}=_pipeData;
   if(!holds.length){ v.appendChild(emptyState('inbox','Nothing in production yet','Commit a split doc in Stage 1 — its tasks appear here as they move through Production.')); icons(); return; }
   const jobById={}; jobs.forEach(j=>{jobById[j.id]=j;});
-  const byJob={}; holds.forEach(h=>{(byJob[h.job_id]||(byJob[h.job_id]=[])).push(h);});
-  const stOf=h=> h.promoted_at ? {l:'Promoted',c:'win'} : h.clickup_task_id ? {l:'Awaiting Drive link',c:''} : {l:'Queued',c:''};
-  v.appendChild(el('<p class="ph-sub" style="margin:0 0 12px;display:flex;align-items:center;gap:6px"><i data-lucide="eye"></i>Read-only mirror — editors paste Drive links on the ClickUp task; this reflects it. No actions here.</p>'));
-  const grid=el('<div class="grid"></div>');
+  const byJob={}; holds.forEach(h=>{_holdById[h.id]=h;(byJob[h.job_id]||(byJob[h.job_id]=[])).push(h);});
+  v.appendChild(el('<div class="rev-note"><i data-lucide="eye"></i>Read-only review — double-check each delivered creative before launch. Editors deliver via ClickUp; nothing here writes or launches.</div>'));
+  const wrap=el('<div></div>');
   Object.keys(byJob).forEach(jid=>{
     const hs=byJob[jid].slice().sort((a,b)=>(a.entry_index||0)-(b.entry_index||0));
-    const job=jobById[jid]||{}, done=hs.filter(h=>h.promoted_at).length;
-    const rows=hs.map(h=>{const s=stOf(h);
-      const task=h.clickup_task_id?`<a href="https://app.clickup.com/t/${_esc(h.clickup_task_id)}" target="_blank" rel="noopener" class="pl-link">task</a>`:'';
-      const prod=h.production_task_id?`<a href="https://app.clickup.com/t/${_esc(h.production_task_id)}" target="_blank" rel="noopener" class="pl-link">prod</a>`:'';
-      return `<div class="pl-row"><span class="pl-ad mono">AD ${_esc(h.ad_number||'—')}</span>`
-        +`<span class="pl-vid" title="${_esc(h.video_file||'')}">${_esc(h.video_file||'')}${h.test_label?' · '+_esc(h.test_label):''}</span>`
-        +`<span class="tag ${s.c}" style="margin-left:auto">${s.l}</span>${task}${prod}</div>`;
-    }).join('');
-    grid.appendChild(el(`<div class="scard">
-      <div class="nm">${_esc(job.store_name||job.store_slug||'—')}<span class="pill">${done}/${hs.length} in prod</span></div>
-      <div class="tags"><span class="tag"><i data-lucide="file-text"></i>${_esc(job.source_filename||'doc')}</span>`
-        +`${job.editor_name?`<span class="tag"><i data-lucide="user"></i>${_esc(job.editor_name)}</span>`:''}</div>
-      <div class="pl-rows">${rows}</div></div>`));
+    const job=jobById[jid]||{}, bud=_cfgBudget(job.campaign_config), done=hs.filter(h=>h.promoted_at).length;
+    const card=el(`<div class="rev-job"><div class="rev-jobh">
+      <span class="rj-nm">${_esc(job.store_name||job.store_slug||'—')}</span>
+      <span class="rj-meta"><i data-lucide="file-text"></i>${_esc(job.source_filename||'doc')}</span>
+      ${job.editor_name?`<span class="rj-meta"><i data-lucide="user"></i>${_esc(job.editor_name)}</span>`:''}
+      ${bud.summary?`<span class="rj-meta"><i data-lucide="wallet"></i>${_esc(bud.summary)}</span>`:''}
+      ${job.account_id?`<span class="rj-meta"><i data-lucide="megaphone"></i>${_esc(job.account_id)}</span>`:''}
+      <span class="rj-prog">${done}/${hs.length} delivered</span>
+    </div></div>`);
+    hs.forEach(h=>card.appendChild(_revCard(h,job,bud)));
+    wrap.appendChild(card);
   });
-  v.appendChild(grid);
+  v.appendChild(wrap); icons();
+  _fillDrives(holds);   // async: resolve delivered creatives' Drive URLs and upgrade the buttons
+}
+
+function _revCard(h,job,bud){
+  const la=h.launch_half||{}, delivered=!!h.promoted_at;
+  const st=delivered?{c:'ok',t:'Delivered'}:h.clickup_task_id?{c:'wait',t:'In production'}:{c:'wait',t:'Queued'};
+  const taskUrl=h.clickup_task_id?('https://app.clickup.com/t/'+_esc(h.clickup_task_id)):'';
+  const prodUrl=h.production_task_id?('https://app.clickup.com/t/'+_esc(h.production_task_id)):'';
+  const copy=_esc((la.ad_copy||'').trim());
+  const spec=(ic,k,val,mono)=>`<div class="rev-spec"><span class="rs-k"><i data-lucide="${ic}"></i>${k}</span><span class="rs-v${mono?' mono':''}" title="${_esc(val||'')}">${val?_esc(val):'—'}</span></div>`;
+  const vid = delivered
+    ? `<a class="rev-vid" data-drive-for="${_esc(h.id)}" ${taskUrl?`href="${taskUrl}"`:'href="#"'} target="_blank" rel="noopener" title="Open delivered video"><span class="rv-play"><i data-lucide="play"></i></span><span class="rv-badge"><i data-lucide="loader"></i>resolving…</span></a>`
+    : `<div class="rev-vid wait" title="Editor hasn't delivered yet"><span class="rv-play"><i data-lucide="clock"></i></span><span class="rv-badge"><i data-lucide="hourglass"></i>awaiting</span></div>`;
+  const c=el(`<div class="rev-card">${vid}
+    <div class="rev-body">
+      <div class="rev-top"><span class="rev-ad">AD ${_esc(h.ad_number||'—')}</span><span class="rev-file">${_esc(h.video_file||'')}</span>
+        <span class="rev-dot ${st.c}"><i></i>${st.t}</span></div>
+      <div class="rev-specs">
+        ${spec('layout-grid','Ad set',_adSetLabel(la))}
+        ${spec('wallet','Budget',bud.perAd)}
+        ${spec('megaphone','Ad account',job.account_id,true)}
+        ${spec('tag','Ad name',_adName(la))}
+      </div>
+      ${copy?`<div class="rev-copy clamp">${copy}</div>`:'<div class="rev-copy" style="color:var(--mut2)">— no ad copy held —</div>'}
+      <div class="rev-actions">
+        ${delivered?`<a class="rev-btn prim" data-drive-for="${_esc(h.id)}" ${taskUrl?`href="${taskUrl}"`:'href="#"'} target="_blank" rel="noopener"><i data-lucide="external-link"></i>Open in Drive</a>`:''}
+        <button class="rev-btn" data-review="${_esc(h.id)}"><i data-lucide="search-check"></i>Review details</button>
+        ${taskUrl?`<a class="rev-btn" href="${taskUrl}" target="_blank" rel="noopener"><i data-lucide="clipboard-list"></i>Task</a>`:''}
+        ${prodUrl?`<a class="rev-btn" href="${prodUrl}" target="_blank" rel="noopener"><i data-lucide="clapperboard"></i>Production</a>`:''}
+      </div>
+    </div></div>`);
+  const rb=c.querySelector('[data-review]'); if(rb) rb.addEventListener('click',()=>_openHoldReview(h.id));
+  return c;
+}
+
+// Resolve each delivered creative's Drive URL from its ClickUp task (read-only, buyer's token).
+// No token, or a URL that won't resolve → the button gracefully points at the ClickUp task instead.
+async function _fillDrives(holds){
+  const delivered=holds.filter(h=>h.promoted_at&&h.clickup_task_id);
+  if(!delivered.length) return;
+  if(!_cuTokenQuiet()){ delivered.forEach(h=>_setDrive(h.id,'',h.clickup_task_id)); return; }
+  for(const h of delivered){
+    const task=await _cuGet('/task/'+h.clickup_task_id);
+    const drive=_driveFromTask(task);
+    if(_holdById[h.id]) _holdById[h.id]._drive=drive;
+    _setDrive(h.id,drive,h.clickup_task_id);
+  }
+}
+function _setDrive(hid,drive,taskId){
+  const url=drive||('https://app.clickup.com/t/'+taskId);
+  let sel; try{sel='[data-drive-for="'+CSS.escape(hid)+'"]';}catch(e){sel='[data-drive-for="'+hid+'"]';}
+  document.querySelectorAll(sel).forEach(elm=>{
+    elm.setAttribute('href',url);
+    const badge=elm.querySelector('.rv-badge');
+    if(badge) badge.innerHTML=drive?'<i data-lucide="play-circle"></i>play':'<i data-lucide="external-link"></i>task';
+    if(elm.classList.contains('rev-btn')) elm.innerHTML=drive?'<i data-lucide="external-link"></i>Open in Drive':'<i data-lucide="external-link"></i>Open task';
+  });
+  icons();
+}
+
+// Review drawer — the buyer's pre-launch double-check: video + full held ad copy + every spec.
+function _openHoldReview(hid){
+  const h=_holdById[hid]; if(!h)return;
+  const job=(_pipeData.jobs||[]).find(j=>j.id===h.job_id)||{};
+  const la=h.launch_half||{}, bud=_cfgBudget(job.campaign_config), delivered=!!h.promoted_at;
+  const drive=h._drive||'', embed=_driveEmbed(drive);
+  const taskUrl=h.clickup_task_id?('https://app.clickup.com/t/'+_esc(h.clickup_task_id)):'';
+  const openUrl=drive||taskUrl;
+  const row=(ic,k,val)=>`<div class="drow"><span class="dk"><i data-lucide="${ic}"></i>${k}</span><span class="dv${val?'':' muted'}">${val?_esc(val):'—'}</span></div>`;
+  const campaign=(la.tokens&&la.tokens.campaign_label)||(job.campaign_config&&(job.campaign_config['Campaign Name']||job.campaign_config['Campaign']))||'';
+  const player = delivered&&embed
+    ? `<div style="border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;aspect-ratio:16/9;background:#000"><iframe src="${embed}" style="width:100%;height:100%;border:0" allow="autoplay" allowfullscreen></iframe></div>` : '';
+  $('#drawer').innerHTML=`
+    <div class="dh"><div class="dt"><div class="dnm">AD ${_esc(h.ad_number||'—')} · ${_esc(h.video_file||'')}</div>
+      <div class="dsub"><i data-lucide="store" style="width:14px;height:14px"></i>${_esc(job.store_name||job.store_slug||'—')}${h.test_label?' · '+_esc(h.test_label):''}</div></div>
+      <button class="iconbtn" onclick="closeDrawer()"><i data-lucide="x"></i></button></div>
+    <div class="db">
+      <span class="stagepill" style="${delivered?'background:#16a34a1a;color:#16a34a':'background:#b453091a;color:#b45309'}"><i data-lucide="${delivered?'check-circle':'clock'}"></i>${delivered?'Delivered — ready to review':'Awaiting editor delivery'}</span>
+      ${player}
+      ${openUrl?`<div class="dlink" style="margin-top:0"><a class="btn" style="text-decoration:none;width:auto" href="${openUrl}" target="_blank" rel="noopener"><i data-lucide="external-link"></i>${drive?'Open in Drive':'Open task in ClickUp'}</a></div><div style="height:6px"></div>`:''}
+      ${row('layout-grid','Ad set',_adSetLabel(la))}
+      ${row('megaphone','Ad account',job.account_id)}
+      ${row('wallet','Budget',bud.perAd)}
+      ${row('gauge','Spend cap',bud.cap?('$'+bud.cap):'')}
+      ${row('calendar-range','Run length',bud.run?(bud.run+' days'):'')}
+      ${row('tag','Ad name',_adName(la))}
+      ${row('folder','Campaign',campaign)}
+      <div class="dwin"><div class="wk"><i data-lucide="file-text"></i>Ad copy (held · reused, not regenerated)</div><div class="wv" style="white-space:pre-wrap;word-break:normal;font-weight:500">${_esc((la.ad_copy||'').trim())||'—'}</div></div>
+    </div>`;
+  $('#drawerWrap').classList.add('show'); icons();
+}
+
+// STAGE 3 — SCHEDULE (gated). Reviewed/delivered creatives ready to launch. The Schedule button IS
+// the Meta-launch trigger: DISABLED + visibly gated here, and the SAME server endpoint
+// (/api/launch-submit) refuses with 403 while META_LAUNCH_ALLOW_LIVE_WRITES is unset — regardless
+// of the UI. No launch logic is touched; a prettier button is not a fireable one.
+function viewPipeSchedule(mount){
+  const v=mount||$('#view'); v.innerHTML='';
+  const {jobs,holds}=_pipeData;
+  const jobById={}; jobs.forEach(j=>{jobById[j.id]=j;});
+  const ready=holds.filter(h=>h.promoted_at).slice().sort((a,b)=>(a.entry_index||0)-(b.entry_index||0));
+  v.appendChild(el('<div class="sch-note"><i data-lucide="shield-alert"></i><div><b>Gated — Phase&nbsp;2.</b> Launching to Meta is disabled until the security runbook is cleared (hardened token + <code>META_LAUNCH_ALLOW_LIVE_WRITES=1</code>). The server refuses every launch with <b>403</b> regardless of this screen — the button below is inert by design.</div></div>'));
+  if(!ready.length){ v.appendChild(emptyState('rocket','Nothing ready to schedule yet','Delivered creatives from Stage 2 land here, each with its (gated) Schedule button.')); icons(); return; }
+  const wrap=el('<div></div>');
+  ready.forEach(h=>{const job=jobById[h.job_id]||{}, bud=_cfgBudget(job.campaign_config), la=h.launch_half||{};
+    wrap.appendChild(el(`<div class="sch-card">
+      <span class="sc-ad">AD ${_esc(h.ad_number||'—')}</span>
+      <span class="sc-meta"><i data-lucide="video"></i>${_esc(h.video_file||'')}</span>
+      <span class="sc-meta"><i data-lucide="layout-grid"></i>${_esc(la.ad_set||'—')}</span>
+      <span class="sc-meta"><i data-lucide="megaphone"></i>${_esc(job.account_id||'—')}</span>
+      <span class="sc-meta"><i data-lucide="wallet"></i>${_esc(bud.perAd)}</span>
+      <button class="sch-btn" disabled title="Launch is server-gated until Phase 2"><i data-lucide="lock"></i>Schedule launch · Gated</button>
+    </div>`));
+  });
+  v.appendChild(wrap);
+  v.appendChild(el('<p class="ph-sub" style="margin:12px 2px 0;font-size:12px;color:var(--mut)">When Phase&nbsp;2 opens, Schedule posts to the same <code>/api/launch-submit</code> endpoint that returns 403 today — the gate is server-authoritative, not UI.</p>'));
   icons();
 }
 
@@ -1540,7 +1737,14 @@ const WL_UNSTARTED=new Set(['to do','todo','to-do','not started','open','backlog
 const WL_PRIO={urgent:0,high:1,normal:2,low:3};
 function _wlDeadlineMs(off){const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(Date.now()+off*864e5);return new Date(ds+'T23:59:00+05:30').getTime();}
 function _cuToken(){let t=localStorage.getItem('cu_token');if(!t){t=prompt('Paste your ClickUp personal API token (stored only in this browser; used to write due dates):');if(t){t=t.trim();localStorage.setItem('cu_token',t);}}return (t||'').trim();}
+function _cuTokenQuiet(){return (localStorage.getItem('cu_token')||'').trim();}   // never prompts (read-only surfaces)
 async function _cuPut(path,body){const tok=_cuToken();if(!tok)throw new Error('no ClickUp token');const r=await fetch('/api/clickup?path='+encodeURIComponent(path)+'&v=2',{method:'PUT',headers:{'Authorization':tok,'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok;}
+// READ-ONLY ClickUp GET via the existing proxy, using the buyer's own token. Returns null (no throw,
+// no prompt) if there's no token or the read fails — Stage 2 degrades to task links. Never writes.
+async function _cuGet(path){const tok=_cuTokenQuiet();if(!tok)return null;try{const r=await fetch('/api/clickup?path='+encodeURIComponent(path)+'&v=2',{headers:{'Authorization':tok}});if(!r.ok)return null;return await r.json();}catch(e){return null;}}
+// Read a task's "Drive Link" custom field value by NAME (store/list-agnostic, mirrors the worker).
+function _driveFromTask(task){if(!task||!Array.isArray(task.custom_fields))return '';for(const cf of task.custom_fields){if((cf.name||'').trim().toLowerCase()==='drive link'){const v=cf.value;return (typeof v==='string'?v:'').trim();}}return '';}
+function _driveEmbed(url){const m=String(url||'').match(/\/d\/([-\w]{10,})|[?&]id=([-\w]{10,})/);const id=m&&(m[1]||m[2]);return id?('https://drive.google.com/file/d/'+id+'/preview'):'';}
 async function _applySpread(ed,btn){
   const re=(ed.tasks||[]).filter(t=>WL_UNSTARTED.has((t.status||'').trim().toLowerCase()));
   if(!re.length)return;
