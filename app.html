@@ -1203,17 +1203,22 @@ function _revCard(h,job,bud){
 async function _fillDrives(holds){
   const delivered=holds.filter(h=>h.promoted_at&&h.clickup_task_id);
   if(!delivered.length) return;
-  const ids=delivered.map(h=>h.clickup_task_id);
+  // PRIMARY: the Drive link the promotion worker carried into launch_holds — read straight from
+  // Supabase, no ClickUp token, instant. This is the source once a hold has been promoted.
+  for(const h of delivered){ if(h.drive_link){ h._drive=h.drive_link; _setDrive(h.id,h.drive_link,h.clickup_task_id); } }
+  const need=delivered.filter(h=>!h.drive_link);
+  if(!need.length) return;
+  // FALLBACK (holds promoted before the carry, or link added post-promotion): resolve live via the
+  // server endpoint (app's own token), then the buyer's own token, then the task link.
+  const ids=need.map(h=>h.clickup_task_id);
   let drives={}, provisioned=false;
   try{
     const r=await fetch('/api/launch-drive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task_ids:ids})});
     if(r.ok){ const j=await r.json(); drives=j.drives||{}; provisioned=!!j.provisioned; }
   }catch(e){}
-  for(const h of delivered){
+  for(const h of need){
     let drive=drives[h.clickup_task_id]||'';
-    if(!drive && !provisioned && _cuTokenQuiet()){          // fallback: buyer's own token
-      drive=_driveFromTask(await _cuGet('/task/'+h.clickup_task_id));
-    }
+    if(!drive && !provisioned && _cuTokenQuiet()){ drive=_driveFromTask(await _cuGet('/task/'+h.clickup_task_id)); }
     if(_holdById[h.id]) _holdById[h.id]._drive=drive;
     _setDrive(h.id,drive,h.clickup_task_id);
   }
@@ -1244,7 +1249,7 @@ function _openHoldReview(hid){
   _openHoldId=hid;
   const job=(_pipeData.jobs||[]).find(j=>j.id===h.job_id)||{};
   const la=h.launch_half||{}, bud=_cfgBudget(_effConfig(job)), delivered=!!h.promoted_at;
-  const drive=h._drive||'', embed=_driveEmbed(drive);
+  const drive=h._drive||h.drive_link||'', embed=_driveEmbed(drive);
   const taskUrl=h.clickup_task_id?('https://app.clickup.com/t/'+_esc(h.clickup_task_id)):'';
   const openUrl=drive||taskUrl;
   const campaign=(la.tokens&&la.tokens.campaign_label)||(job.campaign_config&&(job.campaign_config['Campaign Name']||job.campaign_config['Campaign']))||'';
