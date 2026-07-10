@@ -1339,9 +1339,9 @@ function viewTeam(){
   // scoped styling (injected once) — capacity rings, status colours, chips
   if(!document.getElementById('teamcss')){document.head.appendChild(el(`<style id="teamcss">
   .pcard.over{border-left-color:#dc2626}.pcard.under{border-left-color:#d97706}
-  .pcard.ontrack{border-left-color:#16a34a}.pcard.no-data{border-left-color:#94a3b8}
+  .pcard.ontrack{border-left-color:#16a34a}.pcard.no-data{border-left-color:var(--mut2)}
   .tcard-h{display:flex;align-items:center;gap:15px}.cring{flex:0 0 auto}
-  .cringt{font-size:13px;font-weight:800;fill:#334155}
+  .cringt{font-size:13px;font-weight:800;fill:var(--ink2)}
   .tbig{font-size:25px;font-weight:800;line-height:1;letter-spacing:-.02em}
   .tbiglab{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
   .tname{font-weight:700;font-size:14px;margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
