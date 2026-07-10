@@ -268,6 +268,8 @@ table.tbl tbody tr:hover{background:var(--bg)}
 .rev-vid .rv-play{width:44px;height:44px;border-radius:999px;background:rgba(255,255,255,.92);display:grid;place-items:center;color:var(--indigo);box-shadow:0 2px 10px rgba(20,22,31,.14);transition:transform .14s}
 .rev-vid:hover .rv-play{transform:scale(1.08)}
 .rev-vid .rv-play [data-lucide]{width:20px;height:20px}
+.rev-vid .rev-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.rev-vid .rv-play,.rev-vid .rv-badge{z-index:1}
 .rev-vid .rv-badge{position:absolute;left:8px;bottom:8px;font-size:10px;font-weight:700;color:#fff;background:rgba(20,22,31,.62);border-radius:6px;padding:2px 7px;display:inline-flex;align-items:center;gap:4px}
 .rev-vid .rv-badge [data-lucide]{width:11px;height:11px}
 .rev-vid.wait{cursor:default;background:repeating-linear-gradient(135deg,#f4f5fb,#f4f5fb 10px,#eef0f7 10px,#eef0f7 20px)}
@@ -1010,6 +1012,12 @@ async function _launchEdit(payload){
 }
 
 let _editState=null;
+let _openHoldId=null;   // which hold's Review drawer is open (so a save refreshes it too)
+// Re-render the current stage + the open drawer immediately after an edit — no manual refresh.
+function _refreshAfterEdit(){
+  mountStage(_pipeStage);
+  if($('#drawerWrap').classList.contains('show') && _openHoldId) _openHoldReview(_openHoldId);
+}
 // spec: {title,label,icon,field,job_id,hold_id,kind,value,choices,help,safety,applies,overridden}
 function _openEdit(spec){
   _editState=spec;
@@ -1058,7 +1066,11 @@ async function _saveEdit(){
   const btn=$('#emSave'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader"></i>Saving…'; icons();
   const res=await _launchEdit({job_id:spec.job_id,hold_id:spec.hold_id||null,field:spec.field,value:val});
   _showEditResult(res); btn.disabled=false; btn.innerHTML='<i data-lucide="check"></i>Save'+(spec.safety?' &amp; re-validate':''); icons();
-  if(res.ok){ _applyEditLocal(spec,val); setTimeout(()=>{_closeEdit(); mountStage(_pipeStage);},700); }
+  if(res.ok){                                          // apply the SERVER-normalized value, re-render NOW
+    _applyEditLocal(spec, res.value!=null?res.value:val);
+    _refreshAfterEdit();
+    setTimeout(_closeEdit,900);                         // leave the ✓ result up briefly, then close
+  }
 }
 async function _revertEdit(){
   const spec=_editState; if(!spec)return;
@@ -1066,7 +1078,7 @@ async function _revertEdit(){
   _showEditResult(res.ok?{ok:true}:res);
   if(res.ok){ if(spec.hold_id){const h=(_pipeData.holds||[]).find(x=>x.id===spec.hold_id); if(h&&h.overrides)delete h.overrides[spec.field];}
     else{const j=(_pipeData.jobs||[]).find(x=>x.id===spec.job_id); if(j&&j.overrides)delete j.overrides[spec.field];}
-    setTimeout(()=>{_closeEdit(); mountStage(_pipeStage);},550); }
+    _refreshAfterEdit(); setTimeout(_closeEdit,700); }
 }
 $('#editWrap').addEventListener('click',e=>{if(e.target.classList.contains('ov'))_closeEdit();});
 
@@ -1157,7 +1169,7 @@ function _revCard(h,job,bud){
   // spec with an optional per-ad edit pencil (data-edit=field) + edited chip
   const spec=(ic,k,val,field,mono)=>`<div class="rev-spec"><span class="rs-k"><i data-lucide="${ic}"></i>${k}</span><span class="rs-v${mono?' mono':''}" title="${_esc(val||'')}">${val?_esc(val):'—'}${field?' '+_pencil(field):''}${field&&_ovr(h,field)?' '+_editedChip:''}</span></div>`;
   const vid = delivered
-    ? `<a class="rev-vid" data-drive-for="${_esc(h.id)}" ${taskUrl?`href="${taskUrl}"`:'href="#"'} target="_blank" rel="noopener" title="Open delivered video"><span class="rv-play"><i data-lucide="play"></i></span><span class="rv-badge"><i data-lucide="loader"></i>resolving…</span></a>`
+    ? `<a class="rev-vid" data-drive-for="${_esc(h.id)}" ${taskUrl?`href="${taskUrl}"`:'href="#"'} target="_blank" rel="noopener" title="Play the delivered video"><img class="rev-thumb" data-thumb-for="${_esc(h.id)}" alt="" style="display:none"><span class="rv-play"><i data-lucide="play"></i></span><span class="rv-badge"><i data-lucide="loader"></i>resolving…</span></a>`
     : `<div class="rev-vid wait" title="Editor hasn't delivered yet"><span class="rv-play"><i data-lucide="clock"></i></span><span class="rv-badge"><i data-lucide="hourglass"></i>awaiting</span></div>`;
   const c=el(`<div class="rev-card">${vid}
     <div class="rev-body">
@@ -1184,19 +1196,31 @@ function _revCard(h,job,bud){
   return c;
 }
 
-// Resolve each delivered creative's Drive URL from its ClickUp task (read-only, buyer's token).
-// No token, or a URL that won't resolve → the button gracefully points at the ClickUp task instead.
+// Resolve each delivered creative's Drive URL. PRIMARY = server-side /api/launch-drive (the app's own
+// CLICKUP_LAUNCH_TOKEN → works for EVERY buyer, no personal ClickUp token needed). FALLBACK = the
+// buyer's own token via the proxy (only if the server token isn't provisioned + they have one). Last
+// resort = the ClickUp task link. Read-only throughout.
 async function _fillDrives(holds){
   const delivered=holds.filter(h=>h.promoted_at&&h.clickup_task_id);
   if(!delivered.length) return;
-  if(!_cuTokenQuiet()){ delivered.forEach(h=>_setDrive(h.id,'',h.clickup_task_id)); return; }
+  const ids=delivered.map(h=>h.clickup_task_id);
+  let drives={}, provisioned=false;
+  try{
+    const r=await fetch('/api/launch-drive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task_ids:ids})});
+    if(r.ok){ const j=await r.json(); drives=j.drives||{}; provisioned=!!j.provisioned; }
+  }catch(e){}
   for(const h of delivered){
-    const task=await _cuGet('/task/'+h.clickup_task_id);
-    const drive=_driveFromTask(task);
+    let drive=drives[h.clickup_task_id]||'';
+    if(!drive && !provisioned && _cuTokenQuiet()){          // fallback: buyer's own token
+      drive=_driveFromTask(await _cuGet('/task/'+h.clickup_task_id));
+    }
     if(_holdById[h.id]) _holdById[h.id]._drive=drive;
     _setDrive(h.id,drive,h.clickup_task_id);
   }
 }
+// Google Drive poster frame — only resolves for link-shared files; <img> onerror falls back to the
+// play-icon placeholder (never a broken image).
+function _driveThumb(url){const m=String(url||'').match(/\/d\/([-\w]{10,})|[?&]id=([-\w]{10,})/);const id=m&&(m[1]||m[2]);return id?('https://drive.google.com/thumbnail?id='+id+'&sz=w400'):'';}
 function _setDrive(hid,drive,taskId){
   const url=drive||('https://app.clickup.com/t/'+taskId);
   let sel; try{sel='[data-drive-for="'+CSS.escape(hid)+'"]';}catch(e){sel='[data-drive-for="'+hid+'"]';}
@@ -1206,6 +1230,9 @@ function _setDrive(hid,drive,taskId){
     if(badge) badge.innerHTML=drive?'<i data-lucide="play-circle"></i>play':'<i data-lucide="external-link"></i>task';
     if(elm.classList.contains('rev-btn')) elm.innerHTML=drive?'<i data-lucide="external-link"></i>Open in Drive':'<i data-lucide="external-link"></i>Open task';
   });
+  const thumb=_driveThumb(drive);
+  let tsel; try{tsel='[data-thumb-for="'+CSS.escape(hid)+'"]';}catch(e){tsel='[data-thumb-for="'+hid+'"]';}
+  if(thumb) document.querySelectorAll(tsel).forEach(img=>{ img.onload=()=>{img.style.display='block';}; img.onerror=()=>{img.style.display='none';}; img.src=thumb; });
   icons();
 }
 
@@ -1214,6 +1241,7 @@ function _ovrF(field,h,job){return ['budget_amount','spend_cap','run_length','ac
 // + this task's edit history.
 function _openHoldReview(hid){
   const h=_holdById[hid]; if(!h)return;
+  _openHoldId=hid;
   const job=(_pipeData.jobs||[]).find(j=>j.id===h.job_id)||{};
   const la=h.launch_half||{}, bud=_cfgBudget(_effConfig(job)), delivered=!!h.promoted_at;
   const drive=h._drive||'', embed=_driveEmbed(drive);
