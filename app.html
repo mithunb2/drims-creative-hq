@@ -26,6 +26,7 @@
   --gold:#a86a09; --gold-bg:#f6efdf; --gold-bg-soft:#f8f1e4; --gold-border:#ecdcae;
   /* warn — safety/amber-ink treatment (was raw hex) */
   --warn:#b45309; --warn-ink:#8a5a10; --warn-bg:#fdf6e7; --warn-bg-soft:#fdfaf1; --warn-border:#f0e2bd; --warn-chip:#fbe9cf;
+  --red-bg:#fdecec; --red-border:#f3caca;
   /* stage/chart palette — single source for STAGE_META + PAL (System 2 collapsed into vars) */
   --stage-script:#0ea5e9; --stage-other:#94a3b8;
   --chart-1:#4f46e5; --chart-2:#0ea5e9; --chart-3:#14b8a6; --chart-4:#f59e0b; --chart-5:#8b5cf6;
@@ -496,6 +497,12 @@ table.tbl tbody tr:hover{background:var(--bg)}
   .tchip,.mchip{padding:4px 9px}
   .drawer{width:100%}
 }
+/* Stage 1 (Doc → Tasks) upload surface — Calm Bento (was dark-theme inline) */
+.s-drop{border:2px dashed var(--line);background:var(--bg);border-radius:var(--radius-sm);padding:26px;text-align:center;cursor:pointer;transition:border-color .14s,background .14s}
+.s-drop:hover{border-color:var(--mut2)}
+.s-drop.on{border-color:var(--accent);background:var(--accent-soft)}
+.s-drop [data-lucide]{width:22px;height:22px;color:var(--mut2)}
+.s-err{display:none;margin-top:10px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px}
 </style>
 </head>
 <body>
@@ -826,25 +833,25 @@ async function _shandleFile(file){
 function _srender(split){
   const rec=split.store_record, ed=split.editor||{};
   const edLine = ed.resolved
-    ? `<span style="color:#30a46c">✓ ${_esc(split.editor_name)} → ${_esc(ed.matched_username||'')} (${_esc(ed.assignee_id)})</span>`
+    ? `<span style="color:var(--green)">✓ ${_esc(split.editor_name)} → ${_esc(ed.matched_username||'')} (${_esc(ed.assignee_id)})</span>`
     : ed.deferred
-    ? `<span style="color:#f5a623">⏳ ${_esc(split.editor_name||'(none named)')} — ${_esc(ed.reason||'resolved at intake')}</span>`
-    : `<span style="color:#e5484d">✕ ${_esc(split.editor_name||'(none named)')} — ${_esc(ed.reason||'not resolved')}</span>`;
+    ? `<span style="color:var(--amber)">⏳ ${_esc(split.editor_name||'(none named)')} — ${_esc(ed.reason||'resolved at intake')}</span>`
+    : `<span style="color:var(--red)">✕ ${_esc(split.editor_name||'(none named)')} — ${_esc(ed.reason||'not resolved')}</span>`;
   const target = rec&&split.account_id
       ? `${_esc(split.store)} → ${_esc(rec.slug)} → <code>${_esc(split.account_id)}</code>`
-      : `${_esc(split.store||'(none)')} → <span style="color:#e5484d">unresolved / no account</span>`;
+      : `${_esc(split.store||'(none)')} → <span style="color:var(--red)">unresolved / no account</span>`;
   const entries=split.entries.map(e=>`
-    <div class="panel" style="border-left:3px solid #5b8def">
+    <div class="panel" style="border-left:3px solid var(--accent)">
       <div style="font-weight:700">AD ${_esc(e.ad_number)} · <code>${_esc(e.video_file)}</code> · ad set <b>${_esc(e.launch_half.ad_set||'—')}</b> · Testing: <i>${_esc(e.test_label||'—')}</i></div>
-      <details style="margin-top:6px"><summary style="cursor:pointer;color:#8b8d98;font-size:13px">SCRIPT (editor half — goes to the task)</summary>
-        <pre style="white-space:pre-wrap;font-size:12px;margin:6px 0;background:#00000022;padding:8px;border-radius:6px">${_esc(e.script)}</pre></details>
-      <details><summary style="cursor:pointer;color:#8b8d98;font-size:13px">AD COPY (launch half — HELD, reused not regenerated)</summary>
-        <pre style="white-space:pre-wrap;font-size:12px;margin:6px 0;background:#00000022;padding:8px;border-radius:6px">${_esc(e.launch_half.ad_copy)}</pre></details>
+      <details style="margin-top:6px"><summary style="cursor:pointer;color:var(--mut);font-size:13px">SCRIPT (editor half — goes to the task)</summary>
+        <pre style="white-space:pre-wrap;font-size:12px;margin:6px 0;background:var(--bg);padding:8px;border-radius:6px">${_esc(e.script)}</pre></details>
+      <details><summary style="cursor:pointer;color:var(--mut);font-size:13px">AD COPY (launch half — HELD, reused not regenerated)</summary>
+        <pre style="white-space:pre-wrap;font-size:12px;margin:6px 0;background:var(--bg);padding:8px;border-radius:6px">${_esc(e.launch_half.ad_copy)}</pre></details>
     </div>`).join('');
   const blk=split.blockers.length
-    ?`<div class="panel"><h3 style="margin:0 0 6px;color:#e5484d">Blockers (fix before commit)</h3>${split.blockers.map(x=>`<div style="color:#ffb3b3;font-size:13px">✕ ${_esc(x)}</div>`).join('')}</div>`
-    :'<div class="panel"><span style="color:#30a46c">✓ No blockers — ready to commit.</span></div>';
-  const warn=split.warnings.length?`<div class="panel"><h3 style="margin:0 0 6px;color:#f5a623">Warnings</h3>${split.warnings.map(x=>`<div style="color:#ffd9a0;font-size:13px">! ${_esc(x)}</div>`).join('')}</div>`:'';
+    ?`<div class="panel"><h3 style="margin:0 0 6px;color:var(--red)">Blockers (fix before commit)</h3>${split.blockers.map(x=>`<div style="color:var(--red);font-size:13px">✕ ${_esc(x)}</div>`).join('')}</div>`
+    :'<div class="panel"><span style="color:var(--green)">✓ No blockers — ready to commit.</span></div>';
+  const warn=split.warnings.length?`<div class="panel"><h3 style="margin:0 0 6px;color:var(--amber)">Warnings</h3>${split.warnings.map(x=>`<div style="color:var(--amber);font-size:13px">! ${_esc(x)}</div>`).join('')}</div>`:'';
   const canCommit=split.blockers.length===0;
   $('#sBody').innerHTML=`
     <div class="panel">
@@ -898,23 +905,23 @@ async function _scommit(split){
 function viewSplit(mount){
   const v=mount||$('#view'); v.innerHTML='';
   v.appendChild(el(`<div><div class="panel">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i data-lucide="split"></i><h2 style="margin:0">Doc → Tasks</h2></div>
+    <div class="panel-h" style="margin-bottom:6px"><i data-lucide="split"></i><h3>Doc → Tasks</h3></div>
     <div class="muted" style="font-size:13px;margin-bottom:14px">Upload one dual-half doc (N scripts, each with its ad copy + launch data below it). It splits into <b>N Creative Pipeline tasks</b> for the editor named in the doc. Launch data is held for the Drive-link → Production step. <b>Tokenless</b>: no Meta contact.</div>
-    <div id="sDrop" style="border:2px dashed #ffffff33;border-radius:12px;padding:26px;text-align:center;cursor:pointer">
+    <div id="sDrop" class="s-drop">
       <input type="file" id="sFile" accept=".docx" style="display:none">
       <i data-lucide="file-up"></i>
       <div style="margin-top:6px"><b>Drop a .docx</b> or <a href="#" id="sBrowse">browse</a></div>
       <div class="muted" id="sFileName" style="margin-top:6px;font-size:13px"></div>
     </div>
-    <div id="sErr" style="display:none;margin-top:10px;color:#ffb3b3;background:#2a1113;border:1px solid #e5484d;border-radius:8px;padding:10px;font-size:13px"></div>
+    <div id="sErr" class="s-err"></div>
   </div>
   <div id="sBody"></div></div>`));
   const fi=$('#sFile'),drop=$('#sDrop');
   $('#sBrowse').addEventListener('click',e=>{e.preventDefault();fi.click();});
   drop.addEventListener('click',e=>{if(e.target.id!=='sBrowse')fi.click();});
-  drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.borderColor='#5b8def';});
-  drop.addEventListener('dragleave',()=>{drop.style.borderColor='#ffffff33';});
-  drop.addEventListener('drop',e=>{e.preventDefault();drop.style.borderColor='#ffffff33';if(e.dataTransfer.files[0])_shandleFile(e.dataTransfer.files[0]);});
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('on');});
+  drop.addEventListener('dragleave',()=>{drop.classList.remove('on');});
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('on');if(e.dataTransfer.files[0])_shandleFile(e.dataTransfer.files[0]);});
   fi.addEventListener('change',e=>{if(e.target.files[0])_shandleFile(e.target.files[0]);});
   icons();
   if(_sstate.split) _srender(_sstate.split);
