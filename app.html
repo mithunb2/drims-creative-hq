@@ -516,9 +516,7 @@ table.tbl tbody tr:hover{background:var(--bg)}
     <button data-tab="deepdive"><i data-lucide="scan-search"></i>Store View</button>
     <button data-tab="winners"><i data-lucide="award"></i>Winners</button>
     <button data-tab="inspo"><i data-lucide="lightbulb"></i>Inspirations</button>
-    <button data-tab="team"><i data-lucide="users"></i>Team</button>
-    <button data-tab="workload"><i data-lucide="gauge"></i>Live</button>
-    <button data-tab="performance"><i data-lucide="bar-chart-3"></i>Performance</button>
+    <button data-tab="teamx"><i data-lucide="users"></i>Team</button>
     <button data-tab="pipeline"><i data-lucide="split"></i>Launch Pipeline</button>
   </nav>
   <main>
@@ -2003,8 +2001,10 @@ function _teamRoster(roles){
   // role is DATA (team_status.role from team.json.kind). Transitional fallback to is_editor until
   // the role column is backfilled; no names/ids hardcoded, no CAPACITY_EXCLUDE_IDS. Each view passes
   // its OWN role set — Today/Capacity get editors+buyers, This-month gets video_editor only.
+  // Roster = ACTIVE ∧ role. active is the live Jibble signal (team_status.active); fail-open —
+  // only an explicit false (marked Removed in Jibble) drops someone, so no false drops on leave.
   return (DATA.team||[]).map(p=>({...p,_role:p.role||(p.is_editor?'video_editor':'other')}))
-    .filter(p=>roles.has(p._role));
+    .filter(p=>roles.has(p._role) && p.active!==false);
 }
 async function viewTeamUnified(){
   const v=$('#view'); v.innerHTML=''; charts.length=0;
