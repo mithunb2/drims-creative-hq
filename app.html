@@ -108,6 +108,15 @@ h3{margin:0;font-size:14px;font-weight:700;letter-spacing:-0.01em}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:16px}
 .panel-h{display:flex;align-items:center;gap:8px;margin-bottom:14px}
 .panel-h [data-lucide]{width:16px;height:16px;color:var(--mut)}
+/* ── unified view masthead (design-audit §4): one title bar for every view ── */
+.vhead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 18px;flex-wrap:wrap;margin-bottom:18px}
+.vhead-main{min-width:0}
+.vhead-main .panel-h{margin-bottom:0}
+.vhead-main .ph-sub{margin-top:4px}
+.vhead-ctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.vhead-stat{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.vhead-stat.hero{font-size:40px;font-weight:850}   /* Team: the count is the view's answer — kept prominent (stat-led) */
+.vhead-lead{display:flex;align-items:center;gap:16px}
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .chart{height:300px;width:100%}
 
@@ -967,8 +976,7 @@ async function viewPipeline(){
   const stage=(n,ic,t,sub,foot,cls)=>`<button class="pl-stage${cls?' '+cls:''}" data-stage="${n}">
     <div class="pl-stop"><span class="pl-ic"><i data-lucide="${ic}"></i></span><span class="pl-sn">STAGE ${n}</span></div>
     <div class="pl-st">${t}</div><div class="pl-ss">${sub}</div><div class="pl-foot">${foot}</div></button>`;
-  v.appendChild(el(`<div class="panel-h" style="margin-bottom:4px"><i data-lucide="split"></i><h3>Launch Pipeline</h3></div>`));
-  v.appendChild(el(`<p class="ph-sub" style="margin:0 0 14px">One doc → tasks → editor delivers → Production → launch. Phase&nbsp;1 live; the launch step is server-gated.</p>`));
+  v.appendChild(el(viewHead('split','Launch Pipeline','One doc → tasks → editor delivers → Production → launch · Phase&nbsp;1 live, the launch step is server-gated.','')));
   v.appendChild(el(`<div class="pl-rail">
     ${stage(1,'file-up','Upload &amp; Split','Doc → N tasks',`<span class="pl-n">${njobs}</span><span class="pl-nl">job${njobs===1?'':'s'}</span>`)}
     ${stage(2,'list-checks','In Production','Review delivered creatives',`<span class="pl-n">${inPipe}</span><span class="pl-nl">in flight · ${promoted} delivered</span>`)}
@@ -1387,6 +1395,17 @@ function storeTiming(ads){const dues=ads.map(dueOf).filter(Boolean);
   const over=dues.filter(d=>d.over).length,up=dues.filter(d=>!d.over).sort((a,b)=>a.t-b.t)[0];
   return {over,next:up?up.days:null};}
 const kpi=(ic,cls,n,l)=>`<div class="kpi ${cls}"><div class="kpi-ic"><i data-lucide="${ic}"></i></div><div class="n">${n}</div><div class="l">${l}</div></div>`;
+// ONE masthead for every view (design-audit §4): .panel-h + h3 + optional .ph-sub, with an
+// optional right-side control slot (a <select>, a count pill, or a stat). Reused everywhere so
+// every view's title comes from the same generator. Header/title markup only — never view logic.
+function viewHead(icon,title,sub,ctrl){
+  return `<div class="vhead"><div class="vhead-main"><div class="panel-h"><i data-lucide="${icon}"></i><h3>${title}</h3></div>${sub?`<p class="ph-sub">${sub}</p>`:''}</div>${ctrl?`<div class="vhead-ctrl">${ctrl}</div>`:''}</div>`;
+}
+// Team's segment header: SAME .vhead container, but the count LEADS on the left (the number is the
+// view's answer — kept as the focal point). The one intentional stat-led variant of the masthead.
+function viewHeadStat(icon,title,sub,stat){
+  return `<div class="vhead"><div class="vhead-main vhead-lead"><div class="vhead-stat hero">${stat}</div><div><div class="panel-h"><i data-lucide="${icon}"></i><h3>${title}</h3></div>${sub?`<p class="ph-sub">${sub}</p>`:''}</div></div></div>`;
+}
 
 function viewOverview(){
   const v=$('#view');v.innerHTML='';
@@ -1401,6 +1420,7 @@ function viewOverview(){
   const readyTest=sc('video_ready'),inTest=sc('testing');
   const editors=editorsOf(motion),timing=hasTiming(),assignee=hasAssignee();
 
+  v.appendChild(el(viewHead('layout-dashboard','Overview','Every creative in motion — from script to test, at a glance.','')));
   /* ── KPI strip ── */
   v.appendChild(el(`<div class="kpis">
     ${kpi('activity','v',motion.length,'Creatives in motion')}
@@ -1581,6 +1601,7 @@ function viewStores(){
   const byFormat=tally(ads,a=>a.format), byStage=tally(ads,a=>(STAGE_META[stageOf(a)]||STAGE_META.other).l);
   const activeEd=new Set(ads.flatMap(a=>String(a.assignee||'').split(',').map(s=>s.trim()).filter(Boolean))).size;
   const done=ads.filter(a=>isWinner(a)||isLoser(a)).length, throughput=ads.length?Math.round(done/ads.length*100):0;
+  v.appendChild(el(viewHead('store','Stores','','')));
   v.appendChild(el(`<div class="kpis">
     ${kpi('store','i',DATA.products.filter(s=>adsForStore(s.id).length).length,'Active stores')}
     ${kpi('clapperboard','v',ads.length,'Total creatives')}
@@ -1629,10 +1650,8 @@ function viewDeepDive(){
   const v=$('#view'),stores=DATA.products;v.innerHTML='';
   if(!stores.length){v.appendChild(emptyState('scan-search','No stores yet','Run the sync to populate stores.'));icons();return;}
   if(!selectedStore||!stores.find(s=>s.id===selectedStore))selectedStore=stores[0].id;
-  v.appendChild(el(`<div class="panel" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-    <div class="panel-h" style="margin:0"><i data-lucide="scan-search"></i><h3>Store</h3></div>
-    <select class="sel" id="storeSel">${stores.map(s=>`<option value="${s.id}" ${s.id===selectedStore?'selected':''}>${storeName(s)}</option>`).join('')}</select>
-    <span class="grow"></span><span class="pill" id="ddTotal"></span></div>`));
+  v.appendChild(el(viewHead('scan-search','Store View','Angles, hooks, personas &amp; outcomes for the selected store.',
+    `<select class="sel" id="storeSel">${stores.map(s=>`<option value="${s.id}" ${s.id===selectedStore?'selected':''}>${storeName(s)}</option>`).join('')}</select><span class="pill" id="ddTotal"></span>`)));
   v.appendChild(el('<div id="ddBody"></div>'));
   $('#storeSel').addEventListener('change',e=>{selectedStore=e.target.value;renderDeepDive();});
   renderDeepDive();
@@ -1708,9 +1727,7 @@ function renderDeepDive(){
 /* WINNERS */
 function viewWinners(){
   const v=$('#view');v.innerHTML='';
-  v.appendChild(el(`<div class="panel"><span class="soon"><i data-lucide="award"></i>Human-picked · Phase 1</span>
-    <div class="panel-h"><i data-lucide="trophy"></i><h3>Winning creatives</h3></div>
-    <p class="ph-sub">Pulled from your ClickUp Winners / Scalers lists. Metric-driven winners (ROAS / CTR) arrive in Phase 2.</p></div>`));
+  v.appendChild(el(viewHead('trophy','Winners','Human-picked from your ClickUp Winners / Scalers lists · metric-driven (ROAS / CTR) winners arrive in Phase 2.','')));
   const wins=DATA.ads.filter(a=>laneOf(a)===LANES.winners||stageOf(a)==='winner');
   if(!wins.length){v.appendChild(emptyState('award','No winners flagged yet','Move a creative into a Winners / Scalers list (or mark status winner) and it shows here after the next sync.'));icons();return;}
   const byStore={};DATA.products.forEach(s=>byStore[s.id]=storeName(s));
@@ -1806,10 +1823,8 @@ function viewInspo(){
   const stores=DATA.products;
   if(!stores.length){v.appendChild(emptyState('lightbulb','No stores yet','Run the sync to populate stores.'));icons();return;}
   if(!inspoStore||!stores.find(s=>s.id===inspoStore))inspoStore=stores[0].id;
-  v.appendChild(el(`<div class="panel" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-    <div class="panel-h" style="margin:0"><i data-lucide="lightbulb"></i><h3>Inspirations &amp; Winners</h3></div>
-    <select class="sel" id="inspoSel">${stores.map(s=>`<option value="${s.id}" ${s.id===inspoStore?'selected':''}>${storeName(s)}</option>`).join('')}</select>
-    <span class="grow"></span><span class="ph-sub">Adds write to the Brand Brain (source of truth), then sync everywhere.</span></div>`));
+  v.appendChild(el(viewHead('lightbulb','Inspirations &amp; Winners','Adds write to the Brand Brain (source of truth), then syncs everywhere.',
+    `<select class="sel" id="inspoSel">${stores.map(s=>`<option value="${s.id}" ${s.id===inspoStore?'selected':''}>${storeName(s)}</option>`).join('')}</select>`)));
   const body=el('<div></div>');v.appendChild(body);
   $('#inspoSel').addEventListener('change',e=>{inspoStore=e.target.value;_inspoManager(body,inspoStore);});
   _inspoManager(body,inspoStore);icons();
@@ -2053,8 +2068,6 @@ async function viewTeamUnified(){
   const v=$('#view'); v.innerHTML=''; charts.length=0;
   if(!DATA.team||!DATA.team.length){ v.appendChild(emptyState('users','Team sync not connected yet','The roster appears once the team sync runs.')); icons(); return; }
   if(!document.getElementById('teamucss')){document.head.appendChild(el(`<style id="teamucss">
-    .tu-hero{font-size:34px;font-weight:850;letter-spacing:-.03em;line-height:1;color:var(--ink)}
-    .tu-herol{font-size:13px;color:var(--mut);margin-top:6px}
     .tu-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:var(--shadow);margin-bottom:8px}
     .tu-nm{font-weight:700;font-size:14px;color:var(--ink)}
     .tu-pill{font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.3px}
@@ -2094,7 +2107,7 @@ async function viewTeamUnified(){
     sb.from('editor_winners').select('*')
   ])).map(r=>r.data||[]);
   _teamData={tasks,hours,comps,output,winners};
-  v.appendChild(el(`<div class="panel-h" style="margin-bottom:4px"><i data-lucide="users"></i><h3>Team</h3></div>`));
+  v.appendChild(el(viewHead('users','Team','','')));
   v.appendChild(el(`<div class="pl-seg" id="tuSeg">
     <button data-seg="today"><i data-lucide="alarm-clock"></i>Today</button>
     <button data-seg="capacity"><i data-lucide="battery-charging"></i>Capacity</button>
@@ -2120,8 +2133,7 @@ function _teamToday(m){
   const behind=roster.map(p=>byId[p.id]).filter(e=>e.overdue||e.stale).sort((a,b)=>(b.overdue-a.overdue)||(b.stale-a.stale));
   const ok=roster.filter(p=>!(byId[p.id].overdue||byId[p.id].stale));
   const rl=p=>p._role==='media_buyer'?'buyer':'editor';
-  m.appendChild(el(`<div class="panel"><div class="tu-hero">${behind.length}</div>
-    <div class="tu-herol">${behind.length?(behind.length===1?'person needs attention now':'people need attention now'):'nobody needs attention right now'}</div></div>`));
+  m.appendChild(el(viewHeadStat('alarm-clock','Needs attention','past-deadline or stale, across the roster',behind.length)));
   const wrap=el('<div></div>');
   // Photo-style attention cards ONLY for people who need attention (red-accent border).
   if(behind.length){
@@ -2144,8 +2156,7 @@ function _teamCapacity(m){
   const free=rk.filter(x=>x.tc<=FREE_MAX).sort((a,b)=>a.tc-b.tc||((a.hw==null?1e9:a.hw)-(b.hw==null?1e9:b.hw)));
   const busy=rk.filter(x=>x.tc>FREE_MAX).sort((a,b)=>a.tc-b.tc);
   const chip=x=>`<span class="tu-rolechip">${x.p._role==='media_buyer'?'buyer':'editor'}</span>`;
-  m.appendChild(el(`<div class="panel"><div class="tu-hero">${free.length}</div>
-    <div class="tu-herol">${free.length===1?'person free for new work':'people free for new work'} <span style="color:var(--mut2)">· free = ≤${FREE_MAX} active task${FREE_MAX===1?'':'s'}</span></div></div>`));
+  m.appendChild(el(viewHeadStat('battery-charging','Free for new work',`people with ≤${FREE_MAX} active task${FREE_MAX===1?'':'s'}`,free.length)));
   const rl=x=>x.p._role==='media_buyer'?'buyer':'editor';
   if(free.length){
     const grid=el('<div class="tu-cardgrid"></div>');
@@ -2176,7 +2187,7 @@ function _teamMonth(m){
   const rows=roster.map(p=>({id:p.id,name:p.name,hrs:Math.round((HRS[p.id]||0)*10)/10,days:(DAYS[p.id]||new Set()).size,closes:CLOSE[p.id]||0}))
     .filter(r=>r.hrs>0||r.closes>0).sort((a,b)=>b.hrs-a.hrs);
   const totHrs=Math.round(rows.reduce((s,r)=>s+r.hrs,0)*10)/10;
-  m.appendChild(el(`<div class="panel"><div class="tu-hero">${totHrs}h</div><div class="tu-herol">logged this month (IST) across ${rows.length} ${rows.length===1?'person':'people'}</div></div>`));
+  m.appendChild(el(viewHeadStat('calendar-range','Logged this month',`across ${rows.length} ${rows.length===1?'person':'people'} · IST`,totHrs+'h')));
   if(!rows.length){ m.appendChild(el('<div class="tu-ok">No hours logged yet this month — fills in as the Jibble hours sync runs.</div>')); return; }
   // Per-editor stat cards. Videos/Vids·hr + Winners/Bonus auto-hide while their data is empty.
   const grid=el('<div class="tu-cardgrid"></div>');
