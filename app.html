@@ -2006,6 +2006,28 @@ function _teamRoster(roles){
   return (DATA.team||[]).map(p=>({...p,_role:p.role||(p.is_editor?'video_editor':'other')}))
     .filter(p=>roles.has(p._role) && p.active!==false);
 }
+// Deterministic SVG character-face avatar, seeded from the person's CLICKUP USER ID (stable —
+// same id ⇒ same face, never random per render). All variation is id-hash driven: background from
+// the design-system accent palette (CSS vars, no hardcoded hex), eye position + shape, and mouth,
+// so every rostered person is visibly distinct. Static by default; gentle lift+scale on hover (.ta).
+// One reusable generator — every view calls this. size = px (larger where the person is the point).
+const _AV_COLORS=['--indigo','--blue','--teal','--violet','--green','--amber'];  // clearly-distinct on-brand hues
+function _avHash(seed){let h=2166136261>>>0;const s=String(seed);for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function teamAvatar(id,name,size){
+  const h=_avHash(id), c='var('+_AV_COLORS[h%_AV_COLORS.length]+')';
+  const eyeY=34+((h>>>3)%5)*3, eyeDX=14+((h>>>6)%5)*3, tall=(h>>>9)&1;
+  const mType=(h>>>11)%5, mY=61+((h>>>14)%3)*3, cx=50, rx=tall?4:5, ry=tall?6:5;
+  const eye=x=>`<ellipse cx="${x}" cy="${eyeY}" rx="${rx}" ry="${ry}" class="ta-f"/>`;
+  let mouth;
+  if(mType===0)      mouth=`<path d="M${cx-12} ${mY} Q${cx} ${mY+10} ${cx+12} ${mY}" class="ta-m"/>`;      // smile
+  else if(mType===1) mouth=`<path d="M${cx-14} ${mY-1} Q${cx} ${mY+15} ${cx+14} ${mY-1}" class="ta-m"/>`;   // grin
+  else if(mType===2) mouth=`<line x1="${cx-10}" y1="${mY+3}" x2="${cx+10}" y2="${mY+3}" class="ta-m"/>`;    // line
+  else if(mType===3) mouth=`<circle cx="${cx}" cy="${mY+2}" r="4.5" class="ta-f"/>`;                        // dot
+  else               mouth=`<path d="M${cx-11} ${mY+3} Q${cx} ${mY-4} ${cx+11} ${mY+3}" class="ta-m"/>`;    // soft
+  return `<span class="ta" style="width:${size}px;height:${size}px" title="${_esc(name||'')}" aria-label="${_esc(name||'')}">`
+    +`<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">`
+    +`<circle cx="50" cy="50" r="50" style="fill:${c}"/>`+eye(cx-eyeDX)+eye(cx+eyeDX)+mouth+`</svg></span>`;
+}
 async function viewTeamUnified(){
   const v=$('#view'); v.innerHTML=''; charts.length=0;
   if(!DATA.team||!DATA.team.length){ v.appendChild(emptyState('users','Team sync not connected yet','The roster appears once the team sync runs.')); icons(); return; }
@@ -2022,6 +2044,28 @@ async function viewTeamUnified(){
     .tu-rolechip{font-size:9.5px;font-weight:700;color:var(--mut);background:var(--line2);border-radius:5px;padding:1px 6px;text-transform:uppercase}
     .tu-ctx{margin-left:auto;font-size:12px;color:var(--mut2);font-weight:600}
     .tu-clk{cursor:pointer}.tu-clk:hover .tu-nm{color:var(--accent-ink)}
+    /* ── character-face avatar (deterministic, id-seeded) ── */
+    .ta{display:inline-flex;flex:none;border-radius:50%;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,31,.14);transition:transform .2s ease}
+    .ta:hover{transform:translateY(-2px) scale(1.06)}
+    .ta .ta-f{fill:#fff;opacity:.96}
+    .ta .ta-m{fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;opacity:.96}
+    /* ── card layouts (calm bento) ── */
+    .tu-cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:12px;margin-top:4px}
+    .tu-card{display:flex;flex-direction:column;gap:11px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;transition:border-color .14s,box-shadow .14s,transform .14s;cursor:pointer}
+    .tu-card:hover{box-shadow:var(--shadow-lg);border-color:#d9dcee;transform:translateY(-1px)}
+    .tu-card.attn{border-color:#f3caca;border-left:4px solid var(--red)}
+    .tu-cardhd{display:flex;align-items:center;gap:11px}
+    .tu-cardhd .nm{font-weight:750;font-size:14.5px;color:var(--ink);line-height:1.18}
+    .tu-cardhd .rl{font-size:9.5px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
+    .tu-chips{display:flex;flex-wrap:wrap;gap:6px}
+    .tu-cardact{align-self:flex-start;margin-left:0}
+    .tu-sub{font-size:11.5px;color:var(--mut2);font-weight:600}
+    .tu-freeln{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .tu-mstats{display:flex;gap:16px;flex-wrap:wrap;padding-top:11px;border-top:1px dashed var(--line)}
+    .tu-mstat .n{font-size:21px;font-weight:800;line-height:1;color:var(--ink)}
+    .tu-mstat .l{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;white-space:nowrap}
+    .tu-mstat.mut .n{color:var(--mut2)}
+    .tu-row .ta{margin-right:2px}
   </style>`));}
   const [tasks,hours,comps,output,winners]=(await Promise.all([
     sb.from('editor_tasks').select('*'), sb.from('editor_hours').select('*'),
@@ -2054,14 +2098,23 @@ function _teamToday(m){
     (WL_UNSTARTED.has((t.status||'').trim().toLowerCase())?(e.stale++):(e.overdue++));});
   const behind=roster.map(p=>byId[p.id]).filter(e=>e.overdue||e.stale).sort((a,b)=>(b.overdue-a.overdue)||(b.stale-a.stale));
   const ok=roster.filter(p=>!(byId[p.id].overdue||byId[p.id].stale));
+  const rl=p=>p._role==='media_buyer'?'buyer':'editor';
   m.appendChild(el(`<div class="panel"><div class="tu-hero">${behind.length}</div>
     <div class="tu-herol">${behind.length?(behind.length===1?'person needs attention now':'people need attention now'):'nobody needs attention right now'}</div></div>`));
-  const wrap=el('<div style="margin-top:4px"></div>');
-  behind.forEach(e=>{const r=[]; if(e.overdue)r.push(`<span class="tu-pill red">${e.overdue} past deadline</span>`);
-    if(e.stale)r.push(`<span class="tu-pill amber">${e.stale} stale</span>`);
-    wrap.appendChild(el(`<div class="tu-row tu-clk" data-emp="${_esc(e.p.name)}"><span class="tu-nm">${_esc(e.p.name)}</span>
-      <span>${r.join(' ')}</span>${e.stale?`<button class="tu-act" data-emp="${_esc(e.p.name)}"><i data-lucide="calendar-clock"></i>Reschedule</button>`:''}</div>`));});
-  if(ok.length)wrap.appendChild(el(`<div class="tu-ok"><i data-lucide="check" style="width:13px;height:13px;vertical-align:-2px"></i> ${ok.length} on track: ${ok.map(p=>_esc(p.name)).join(', ')}</div>`));
+  const wrap=el('<div></div>');
+  // Photo-style attention cards ONLY for people who need attention (red-accent border).
+  if(behind.length){
+    const grid=el('<div class="tu-cardgrid"></div>');
+    behind.forEach(e=>{const r=[]; if(e.overdue)r.push(`<span class="tu-pill red">${e.overdue} past deadline</span>`);
+      if(e.stale)r.push(`<span class="tu-pill amber">${e.stale} stale</span>`);
+      grid.appendChild(el(`<div class="tu-card attn tu-clk" data-emp="${_esc(e.p.name)}">
+        <div class="tu-cardhd">${teamAvatar(e.p.id,e.p.name,42)}<div><div class="nm">${_esc(e.p.name)}</div><div class="rl">${rl(e.p)}</div></div></div>
+        <div class="tu-chips">${r.join('')}</div>
+        ${e.stale?`<button class="tu-act tu-cardact"><i data-lucide="calendar-clock"></i>Reschedule</button>`:''}</div>`));});
+    wrap.appendChild(grid);
+  }
+  // On-track collapsed to one calm line below.
+  if(ok.length)wrap.appendChild(el(`<div class="tu-ok" style="margin-top:${behind.length?'12px':'4px'}"><i data-lucide="check" style="width:13px;height:13px;vertical-align:-2px"></i> ${ok.length} on track: ${ok.map(p=>_esc(p.name)).join(', ')}</div>`));
   m.appendChild(wrap);
 }
 // CAPACITY — who can take work. ONE definition: free = ≤FREE_MAX active tasks (drives count AND list).
@@ -2072,15 +2125,19 @@ function _teamCapacity(m){
   const chip=x=>`<span class="tu-rolechip">${x.p._role==='media_buyer'?'buyer':'editor'}</span>`;
   m.appendChild(el(`<div class="panel"><div class="tu-hero">${free.length}</div>
     <div class="tu-herol">${free.length===1?'person free for new work':'people free for new work'} <span style="color:var(--mut2)">· free = ≤${FREE_MAX} active task${FREE_MAX===1?'':'s'}</span></div></div>`));
-  const list=el('<div style="margin-top:4px"></div>');
-  free.forEach(x=>list.appendChild(el(`<div class="tu-row tu-clk" data-emp="${_esc(x.p.name)}"><span class="tu-nm">${_esc(x.p.name)}</span>${chip(x)}
-    <span class="tu-pill free">${x.tc} task${x.tc===1?'':'s'} · free</span><span class="tu-ctx">${x.hw==null?'—':x.hw+'h wk'}</span></div>`)));
-  if(!free.length)list.appendChild(el('<div class="tu-ok">Everyone is at capacity right now.</div>'));
-  m.appendChild(list);
+  const rl=x=>x.p._role==='media_buyer'?'buyer':'editor';
+  if(free.length){
+    const grid=el('<div class="tu-cardgrid"></div>');
+    free.forEach(x=>grid.appendChild(el(`<div class="tu-card tu-clk" data-emp="${_esc(x.p.name)}">
+      <div class="tu-cardhd">${teamAvatar(x.p.id,x.p.name,42)}<div><div class="nm">${_esc(x.p.name)}</div><div class="rl">${rl(x)}</div></div></div>
+      <div class="tu-freeln"><span class="tu-pill free">${x.tc} task${x.tc===1?'':'s'} · free</span></div>
+      <div class="tu-sub">${x.hw==null?'hours not tracked':x.hw+'h this week'}</div></div>`)));
+    m.appendChild(grid);
+  }else m.appendChild(el('<div class="tu-ok">Everyone is at capacity right now.</div>'));
   if(busy.length){
     m.appendChild(el(`<div class="panel-h" style="margin:16px 0 8px"><i data-lucide="layers"></i><h3>At capacity</h3></div>`));
     const b=el('<div></div>');
-    busy.forEach(x=>b.appendChild(el(`<div class="tu-row tu-clk" data-emp="${_esc(x.p.name)}"><span class="tu-nm">${_esc(x.p.name)}</span>${chip(x)}
+    busy.forEach(x=>b.appendChild(el(`<div class="tu-row tu-clk" data-emp="${_esc(x.p.name)}">${teamAvatar(x.p.id,x.p.name,28)}<span class="tu-nm">${_esc(x.p.name)}</span>${chip(x)}
       <span class="tu-pill amber" style="margin-left:auto">${x.tc} active tasks</span></div>`)));
     m.appendChild(b);
   }
@@ -2095,19 +2152,23 @@ function _teamMonth(m){
   hours.forEach(h=>{if(inMonth(h.work_date)){HRS[h.editor_id]=(HRS[h.editor_id]||0)+Number(h.hours||0);(DAYS[h.editor_id]||(DAYS[h.editor_id]=new Set())).add(h.work_date);}});
   comps.forEach(c=>{if(c.month_key===monthKey||inMonth(c.done_date))CLOSE[c.editor_id]=(CLOSE[c.editor_id]||0)+1;});
   const hasVideos=output.some(o=>Number(o.videos||0)>0), hasWinners=winners.length>0;
-  const rows=roster.map(p=>({name:p.name,hrs:Math.round((HRS[p.id]||0)*10)/10,days:(DAYS[p.id]||new Set()).size,closes:CLOSE[p.id]||0}))
+  const rows=roster.map(p=>({id:p.id,name:p.name,hrs:Math.round((HRS[p.id]||0)*10)/10,days:(DAYS[p.id]||new Set()).size,closes:CLOSE[p.id]||0}))
     .filter(r=>r.hrs>0||r.closes>0).sort((a,b)=>b.hrs-a.hrs);
   const totHrs=Math.round(rows.reduce((s,r)=>s+r.hrs,0)*10)/10;
   m.appendChild(el(`<div class="panel"><div class="tu-hero">${totHrs}h</div><div class="tu-herol">logged this month (IST) across ${rows.length} ${rows.length===1?'person':'people'}</div></div>`));
   if(!rows.length){ m.appendChild(el('<div class="tu-ok">No hours logged yet this month — fills in as the Jibble hours sync runs.</div>')); return; }
-  let h=`<table class="ptbl"><thead><tr><th>Editor</th><th class="num">Hours</th><th class="num">Avg/day</th><th class="num">Closes</th>`;
-  if(hasVideos)h+='<th class="num">Videos</th><th class="num">Vids·hr</th>';
-  if(hasWinners)h+='<th class="num">Winners</th><th class="num">Bonus</th>';
-  h+='</tr></thead><tbody>';
-  rows.forEach(r=>{h+=`<tr><td>${_esc(r.name)}</td><td class="num">${r.hrs}</td><td class="num">${r.days?(Math.round(r.hrs/r.days*10)/10):'—'}</td><td class="num">${r.closes||'—'}</td>`;
-    if(hasVideos)h+='<td class="num">—</td><td class="num">—</td>'; if(hasWinners)h+='<td class="num">—</td><td class="num">—</td>'; h+='</tr>';});
-  h+='</tbody></table>';
-  m.appendChild(el('<div class="panel" style="overflow-x:auto">'+h+'</div>'));
+  // Per-editor stat cards. Videos/Vids·hr + Winners/Bonus auto-hide while their data is empty.
+  const grid=el('<div class="tu-cardgrid"></div>');
+  rows.forEach(r=>{const avg=r.days?(Math.round(r.hrs/r.days*10)/10):'—';
+    let stats=`<div class="tu-mstat"><div class="n">${r.hrs}</div><div class="l">hours</div></div>`
+      +`<div class="tu-mstat"><div class="n">${avg}</div><div class="l">avg/day</div></div>`
+      +`<div class="tu-mstat"><div class="n">${r.closes||'—'}</div><div class="l">closes</div></div>`;
+    if(hasVideos)stats+='<div class="tu-mstat mut"><div class="n">—</div><div class="l">videos</div></div><div class="tu-mstat mut"><div class="n">—</div><div class="l">vids·hr</div></div>';
+    if(hasWinners)stats+='<div class="tu-mstat mut"><div class="n">—</div><div class="l">winners</div></div><div class="tu-mstat mut"><div class="n">—</div><div class="l">bonus</div></div>';
+    grid.appendChild(el(`<div class="tu-card tu-clk" data-emp="${_esc(r.name)}">
+      <div class="tu-cardhd">${teamAvatar(r.id,r.name,40)}<div><div class="nm">${_esc(r.name)}</div><div class="rl">editor</div></div></div>
+      <div class="tu-mstats">${stats}</div></div>`));});
+  m.appendChild(grid);
   const pend=[]; if(!hasVideos)pend.push('Videos / Vids·hr'); if(!hasWinners)pend.push('Winners / Bonus');
   if(pend.length)m.appendChild(el(`<p class="ph-sub" style="margin:10px 2px 0;font-size:11.5px"><i data-lucide="info" style="width:12px;height:12px;vertical-align:-2px"></i> ${pend.join(' and ')} appear automatically once their data flows (Drive output sync · winner_sync). Hidden while empty.</p>`));
 }
