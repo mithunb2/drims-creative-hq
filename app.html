@@ -2101,12 +2101,12 @@ async function viewTeamUnified(){
     .tu-mstat.mut .n{color:var(--mut2)}
     .tu-row .ta{margin-right:2px}
   </style>`));}
-  const [tasks,hours,comps,output,winners]=(await Promise.all([
+  const [tasks,hours,comps,output,winners,projects]=(await Promise.all([
     sb.from('editor_tasks').select('*'), sb.from('editor_hours').select('*'),
     sb.from('editor_completions').select('*'), sb.from('editor_output').select('*'),
-    sb.from('editor_winners').select('*')
-  ])).map(r=>r.data||[]);
-  _teamData={tasks,hours,comps,output,winners};
+    sb.from('editor_winners').select('*'), sb.from('editor_projects_done').select('*')
+  ])).map(r=>r.data||[]);   // projects → [] until editor_projects_done is applied (degrades safe)
+  _teamData={tasks,hours,comps,output,winners,projects};
   v.appendChild(el(viewHead('users','Team','','')));
   v.appendChild(el(`<div class="pl-seg" id="tuSeg">
     <button data-seg="today"><i data-lucide="alarm-clock"></i>Today</button>
@@ -2177,7 +2177,31 @@ function _teamCapacity(m){
 }
 // THIS MONTH — output + pay. Only columns that HAVE data; empties auto-hide with a note.
 function _teamMonth(m){
-  const roster=_teamRoster(EDITOR_ONLY), {hours,comps,output,winners}=_teamData;
+  const roster=_teamRoster(EDITOR_ONLY), {hours,comps,output,winners,projects}=_teamData;
+
+  // ── Editor output — all-time tasks accomplished in the ClickUp Projects space (Tasks) + live
+  //    winners (Winners). TWO labeled numbers per card, NEVER summed. Ranked by Tasks desc.
+  //    Fed by projects_done_sync (editor_projects_done) + winner_sync (editor_winners). Roster is
+  //    driven by the projects table (the validated 109/87/86 standing), enriched from team_status
+  //    for avatar/name — independent of whether the editor logged hours THIS month.
+  const winByEd={}; (winners||[]).forEach(w=>{winByEd[w.editor_id]=(winByEd[w.editor_id]||0)+1;});
+  const teamById={}; (DATA.team||[]).forEach(p=>teamById[String(p.id)]=p);
+  const pj=(projects||[]).slice().sort((a,b)=>(b.accomplished||0)-(a.accomplished||0));
+  if(pj.length){
+    const totT=pj.reduce((s,r)=>s+(r.accomplished||0),0);
+    m.appendChild(el(viewHeadStat('trophy','Editor output','tasks accomplished in the Projects space · winners are live',totT)));
+    const g=el('<div class="tu-cardgrid"></div>');
+    pj.forEach(r=>{const p=teamById[String(r.editor_id)], nm=(p&&p.name)||r.editor_name||'—', w=winByEd[r.editor_id]||0;
+      g.appendChild(el(`<div class="tu-card tu-clk" data-emp="${_esc(nm)}">
+        <div class="tu-cardhd">${teamAvatar(r.editor_id,nm,40)}<div><div class="nm">${_esc(nm)}</div><div class="rl">editor</div></div></div>
+        <div class="tu-mstats">
+          <div class="tu-mstat"><div class="n">${r.accomplished||0}</div><div class="l">Tasks</div></div>
+          <div class="tu-mstat"><div class="n">${w}</div><div class="l">Winners</div></div>
+        </div></div>`));});
+    m.appendChild(g);
+    m.appendChild(el(`<p class="ph-sub" style="margin:10px 2px 20px;font-size:11.5px"><i data-lucide="info" style="width:12px;height:12px;vertical-align:-2px"></i> <b>Tasks</b> = all-time tasks completed in the ClickUp Projects space (per editor). <b>Winners</b> = creatives the buyer marked Winner/Scale, credited to the assigned editor — 0 today, climbs live as winners get marked. Two separate counts, never added together.</p>`));
+  }
+
   const monthKey=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(new Date()).slice(0,7);
   const inMonth=d=>String(d||'').slice(0,7)===monthKey;
   const HRS={},DAYS={},CLOSE={};
