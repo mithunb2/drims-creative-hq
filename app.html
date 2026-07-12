@@ -2031,6 +2031,7 @@ function viewTeam(){
    ONE bandwidth definition (active task count) feeding both the count and the list. ══════════════ */
 const TEAM_ROLES=new Set(['video_editor','media_buyer']);   // Today + Capacity
 const EDITOR_ONLY=new Set(['video_editor']);                // This month (output+bonus is editor-only)
+const EDITOR_OUTPUT_ROLES=new Set(['video_editor','designer_images']);  // Editor-output card: video + image/design editors (active roster)
 const FREE_MAX=1;                                  // canonical: free = 0–1 active tasks
 let _teamSeg='today', _teamData=null;
 function _teamRoster(roles){
@@ -2186,7 +2187,13 @@ function _teamMonth(m){
   //    for avatar/name — independent of whether the editor logged hours THIS month.
   const winByEd={}; (winners||[]).forEach(w=>{winByEd[w.editor_id]=(winByEd[w.editor_id]||0)+1;});
   const teamById={}; (DATA.team||[]).forEach(p=>teamById[String(p.id)]=p);
-  const pj=(projects||[]).slice().sort((a,b)=>(b.accomplished||0)-(a.accomplished||0));
+  // Current-team only: the active editor roster (same active!==false signal the rest of the Team tab
+  // uses, via _teamRoster), editor roles = video + image/design. This DROPS departed editors (they're
+  // absent from team_status → not in the roster) and non-editors (buyers/support). Departed editors'
+  // historical numbers stay in the ranking/memory, not on this live current-team card.
+  const activeEditors=new Set(_teamRoster(EDITOR_OUTPUT_ROLES).map(p=>String(p.id)));
+  const pj=(projects||[]).filter(r=>activeEditors.has(String(r.editor_id)))
+    .sort((a,b)=>(b.accomplished||0)-(a.accomplished||0));
   if(pj.length){
     // Hero = editor COUNT, not a sum of Tasks: a 2-editor task credits both, so summing the cards
     // would overcount the distinct accomplished tasks. Per-card Tasks/Winners are never summed.
