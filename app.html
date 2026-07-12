@@ -2188,8 +2188,9 @@ function _teamMonth(m){
   const teamById={}; (DATA.team||[]).forEach(p=>teamById[String(p.id)]=p);
   const pj=(projects||[]).slice().sort((a,b)=>(b.accomplished||0)-(a.accomplished||0));
   if(pj.length){
-    const totT=pj.reduce((s,r)=>s+(r.accomplished||0),0);
-    m.appendChild(el(viewHeadStat('trophy','Editor output','tasks accomplished in the Projects space · winners are live',totT)));
+    // Hero = editor COUNT, not a sum of Tasks: a 2-editor task credits both, so summing the cards
+    // would overcount the distinct accomplished tasks. Per-card Tasks/Winners are never summed.
+    m.appendChild(el(viewHeadStat('trophy','Editor output','ranked by tasks accomplished in the ClickUp Projects space · winners are live',pj.length)));
     const g=el('<div class="tu-cardgrid"></div>');
     pj.forEach(r=>{const p=teamById[String(r.editor_id)], nm=(p&&p.name)||r.editor_name||'—', w=winByEd[r.editor_id]||0;
       g.appendChild(el(`<div class="tu-card tu-clk" data-emp="${_esc(nm)}">
