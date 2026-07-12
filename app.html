@@ -1024,7 +1024,7 @@ function _adName(la){return la.name_string||(la.tokens&&(la.tokens.ad_name||la.t
    re-validated server-side); the browser never writes launch_holds/launch_jobs directly. ──────── */
 const _CFGK={budget_amount:'Budget Amount (USD)',budget_type:'Budget Type',budget_level:'Budget Level',spend_cap:'Launch Spend Cap (USD)',run_length:'Run Length (days)'};
 function _effConfig(job){const c={...((job&&job.campaign_config)||{})},o=(job&&job.overrides)||{};for(const k in _CFGK){if(o[k]!=null&&o[k]!=='')c[_CFGK[k]]=String(o[k]);}return c;}
-function _effAccount(job){const o=(job&&job.overrides)||{};return (o.account_id!=null&&o.account_id!=='')?o.account_id:((job&&job.account_id)||null);}
+function _effAccount(job){const o=(job&&job.overrides)||{};if(o.account_id!=null&&o.account_id!=='')return o.account_id;const so=(window.DRIMS_CONFIG&&DRIMS_CONFIG.STORE_LAUNCH_ACCOUNTS)||{};const slug=job&&job.store_slug;if(slug&&so[slug])return so[slug];return (job&&job.account_id)||null;}
 function _storeAbbr(s){const w=String(s||'').trim().split(/[\s_]+/).filter(Boolean);if(!w.length)return '';const skip=new Set(['the','of','and','a','an','&']);const sig=w.filter(x=>!skip.has(x.toLowerCase()));return (sig.length?sig:w).map(x=>x[0].toUpperCase()).join('');}
 function _genShortName(hold,job){const lh=(hold&&hold.launch_half)||{};const abbr=_storeAbbr((job&&(job.store_name||job.store_slug))||'');const hook=(lh.tokens&&lh.tokens.h)||(hold&&hold.test_label)||(lh.tokens&&lh.tokens.hook)||'';const setL=(hold&&hold.overrides&&hold.overrides.ad_set)||lh.ad_set||'';const mid=hook?String(hook):(hold&&hold.ad_number?('AD '+hold.ad_number):(lh.video_file||''));return [abbr,mid,setL].filter(Boolean).join(' · ');}
 function _effShort(hold,job){const o=(hold&&hold.overrides)||{};return (o.ad_name_short!=null&&o.ad_name_short!=='')?o.ad_name_short:_genShortName(hold,job);}
@@ -1135,7 +1135,7 @@ function viewPipeStatus(mount){
   if(!holds.length){ v.appendChild(emptyState('inbox','Nothing in production yet','Commit a split doc in Stage 1 — its tasks appear here as they move through Production.')); icons(); return; }
   const jobById={}; jobs.forEach(j=>{jobById[j.id]=j;});
   const byJob={}; holds.forEach(h=>{_holdById[h.id]=h;(byJob[h.job_id]||(byJob[h.job_id]=[])).push(h);});
-  v.appendChild(el('<div class="rev-note"><i data-lucide="pencil"></i>Review &amp; edit before launch — budget, ad account, ad set, names and copy are editable; every change is validated + logged. Launch stays server-gated.</div>'));
+  v.appendChild(el('<div class="rev-note"><i data-lucide="pencil"></i>Edit budget, ad account, ad set, names or copy before launch — every change is validated &amp; logged.</div>'));
   const wrap=el('<div></div>');
   Object.keys(byJob).forEach(jid=>{
     const hs=byJob[jid].slice().sort((a,b)=>(a.entry_index||0)-(b.entry_index||0));
@@ -1338,31 +1338,55 @@ function _openHoldReview(hid){
   });
 }
 
-// STAGE 3 — SCHEDULE (gated). Reviewed/delivered creatives ready to launch. The Schedule button IS
-// the Meta-launch trigger: DISABLED + visibly gated here, and the SAME server endpoint
-// (/api/launch-submit) refuses with 403 while META_LAUNCH_ALLOW_LIVE_WRITES is unset — regardless
-// of the UI. No launch logic is touched; a prettier button is not a fireable one.
+// STAGE 3 — SCHEDULE. Clicking Schedule enqueues a PAUSED build on the resolved account via
+// /api/launch-submit; the launch_build_worker creates the campaign/ad set/ad PAUSED and writes the
+// IDs back. Nothing activates — the operator reviews + activates in Ads Manager. Server-gated by
+// META_LAUNCH_ALLOW_LIVE_WRITES (a 403 here means the flag is off).
+const _buildState=(job)=>((job&&job.overrides&&job.overrides.build))||null;
+
+async function _scheduleBuild(jobId, btn, statusEl){
+  btn.disabled=true; statusEl.textContent='Requesting build…';
+  try{
+    const r=await fetch('/api/launch-submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_id:jobId})});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===202){ statusEl.innerHTML='<b>Build requested</b> on <code>'+_esc(d.account_id)+'</code> — the worker is creating the PAUSED campaign. <b>Refresh</b> to see the IDs.'; }
+    else if(r.status===403){ statusEl.textContent='Launches are disabled (safety flag off).'; btn.disabled=false; }
+    else if(r.status===400){ statusEl.textContent='Not ready: '+((d.blockers||[]).join('; ')||d.reason||'blocked'); btn.disabled=false; }
+    else { statusEl.textContent='Error: '+(d.reason||d.error||r.status); btn.disabled=false; }
+  }catch(e){ statusEl.textContent='Network error: '+e.message; btn.disabled=false; }
+}
+
 function viewPipeSchedule(mount){
   const v=mount||$('#view'); v.innerHTML='';
   const {jobs,holds}=_pipeData;
   const jobById={}; jobs.forEach(j=>{jobById[j.id]=j;});
-  const ready=holds.filter(h=>h.promoted_at).slice().sort((a,b)=>(a.entry_index||0)-(b.entry_index||0));
-  v.appendChild(el('<div class="sch-note"><i data-lucide="shield-alert"></i><div><b>Gated — Phase&nbsp;2.</b> Launching to Meta is disabled until the security runbook is cleared (hardened token + <code>META_LAUNCH_ALLOW_LIVE_WRITES=1</code>). The server refuses every launch with <b>403</b> regardless of this screen — the button below is inert by design.</div></div>'));
-  if(!ready.length){ v.appendChild(emptyState('rocket','Nothing ready to schedule yet','Delivered creatives from Stage 2 land here, each with its (gated) Schedule button.')); icons(); return; }
+  const readyByJob={}; holds.filter(h=>h.promoted_at).forEach(h=>{(readyByJob[h.job_id]||(readyByJob[h.job_id]=[])).push(h);});
+  const jids=Object.keys(readyByJob);
+  if(!jids.length){ v.appendChild(emptyState('rocket','Nothing ready to schedule yet','Delivered creatives from Stage 2 land here.')); icons(); return; }
   const wrap=el('<div></div>');
-  ready.forEach(h=>{const job=jobById[h.job_id]||{}, bud=_cfgBudget(_effConfig(job));
-    wrap.appendChild(el(`<div class="sch-card">
-      <span class="sc-ad">${_esc(_effShort(h,job))}</span>
-      <span class="sc-meta"><i data-lucide="video"></i>${_esc(h.video_file||'')}</span>
-      <span class="sc-meta"><i data-lucide="layout-grid"></i>${_esc(_effAdSet(h)||'—')}</span>
-      <span class="sc-meta"><i data-lucide="megaphone"></i>${_esc(_effAccount(job)||'—')}</span>
-      <span class="sc-meta"><i data-lucide="wallet"></i>${_esc(bud.perAd)}</span>
-      <button class="sch-btn" disabled title="Launch is server-gated until Phase 2"><i data-lucide="lock"></i>Schedule launch · Gated</button>
-    </div>`));
+  jids.forEach(jid=>{
+    const job=jobById[jid]||{}, bud=_cfgBudget(_effConfig(job)), acct=_effAccount(job), b=_buildState(job);
+    const card=el(`<div class="sch-card">
+      <div class="sc-line"><span class="sc-ad">${_esc(job.store_name||job.store_slug||'—')}</span>
+        <span class="sc-meta"><i data-lucide="megaphone"></i><b>${_esc(acct||'—')}</b></span>
+        <span class="sc-meta"><i data-lucide="wallet"></i>${_esc(bud.summary||bud.perAd||'')}</span>
+        <span class="sc-meta pausedchip"><i data-lucide="pause"></i>builds PAUSED</span></div></div>`);
+    const statusEl=el('<div class="sc-status"></div>');
+    if(b&&b.status==='built'){
+      statusEl.innerHTML='<span class="ok">✓ Built PAUSED</span> on <code>'+_esc(b.account)+'</code> · campaign <code>'+_esc(b.campaign_id)+'</code> · ad set <code>'+_esc(b.adset_id)+'</code> · ad <code>'+_esc(b.ad_id)+'</code>'+(b.ig_used===false?' · <span class="mut">FB-only</span>':'')+' — review + activate in Ads Manager.';
+    } else if(b&&(b.status==='requested'||b.status==='building')){
+      statusEl.innerHTML='<span class="mut">Build '+_esc(b.status)+'… the worker is creating the PAUSED campaign. Refresh to see the IDs.</span>';
+    } else {
+      const btn=el('<button class="sch-btn"><i data-lucide="rocket"></i>Schedule launch · builds PAUSED</button>');
+      if(b&&b.status==='error') statusEl.innerHTML='<span class="err">Last build error: '+_esc(b.error||'')+'</span>';
+      if(b&&b.status==='blocked_flag_off') statusEl.innerHTML='<span class="err">Blocked — safety flag off.</span>';
+      btn.addEventListener('click',()=>_scheduleBuild(jid,btn,statusEl));
+      card.appendChild(btn);
+    }
+    card.appendChild(statusEl);
+    wrap.appendChild(card);
   });
-  v.appendChild(wrap);
-  v.appendChild(el('<p class="ph-sub" style="margin:12px 2px 0;font-size:12px;color:var(--mut)">When Phase&nbsp;2 opens, Schedule posts to the same <code>/api/launch-submit</code> endpoint that returns 403 today — the gate is server-authoritative, not UI.</p>'));
-  icons();
+  v.appendChild(wrap); icons();
 }
 
 /* OVERVIEW — command center */

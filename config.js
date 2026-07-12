@@ -48,4 +48,12 @@ window.DRIMS_CONFIG = {
   // (launch physically cannot fire without it, regardless of the UI). Previews and
   // localhost still show the tabs for development. Empty this list to reveal everywhere.
   LAUNCH_UI_HOSTS_HIDDEN: ['drims-creative-hq.vercel.app'],
+
+  // --- Store launch-account overrides (DISPLAY parity) ---
+  // slug -> ad account the store's launches actually build on. Mirrors the server's
+  // lib/launch/store_launch_overrides.json so the UI SHOWS the same account the build uses
+  // (no display/launch mismatch). The server file is authoritative; keep this in sync with it.
+  STORE_LAUNCH_ACCOUNTS: {
+    cake_craft_academy: 'act_2501861963596691',  // TEST: CCA-named launches build on the Lolis test account
+  },
 };

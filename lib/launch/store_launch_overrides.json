@@ -1,0 +1,14 @@
+{
+  "_comment": "Per-store LAUNCH ACCOUNT + identity override. Read by the app (effectiveAccount for display + the /api/launch-submit build request) AND the launch_build_worker. Redirects a store's launch to a DIFFERENT ad account + full identity WITHOUT touching clickup_structure — so the store's insights/stats stay on its real account. The override account is treated as an ALLOWED target (containment passes) because it is an explicit, authorized redirect. Delete a store's entry to send its launches back to the registry account.",
+  "stores": {
+    "cake_craft_academy": {
+      "account_id": "act_2501861963596691",
+      "page_id": "893953403798866",
+      "pixel_id": "1724163668803536",
+      "custom_conversion_id": "1556941682754848",
+      "ig_actor_id": "17841467676192975",
+      "default_landing": "https://drimsally.com/",
+      "note": "TEST OVERRIDE (Lolis test account). CCA-named launches build on the $20 Lolis test account, never CCA's real act_797306028304336. Remove after the rehearsal."
+    }
+  }
+}
