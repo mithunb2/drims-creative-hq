@@ -8,7 +8,9 @@ export default async function handler(req, res) {
   if (!APP_ID) return res.status(503).send('META_APP_ID not set in the Vercel env');
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   const proto = req.headers['x-forwarded-proto'] || 'https';
-  const redirect = `${proto}://${host}/api/meta-oauth-callback`;
+  // Pin to META_OAUTH_REDIRECT when set → the redirect always equals your Meta registration no matter
+  // which host serves this request; otherwise derive from the current host.
+  const redirect = process.env.META_OAUTH_REDIRECT || `${proto}://${host}/api/meta-oauth-callback`;
   const state = String((req.query && req.query.state) || '') || Math.random().toString(36).slice(2);
   // READ-only scopes — enough to list businesses + their assets. The write scope stays on the
   // system-user token (runtime), never requested here.

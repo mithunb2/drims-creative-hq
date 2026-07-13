@@ -39,7 +39,7 @@ function page(payload, origin) {
   // postMessage the (non-secret) result to the opener, then close. No token in here.
   return `<!doctype html><meta charset=utf8><body style="font:14px system-ui;padding:24px">
   Discovery complete — you can close this window.
-  <script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)}, ${JSON.stringify(origin)});}catch(e){}
+  <script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)}, '*');}catch(e){}
   setTimeout(function(){window.close();},300);</script></body>`;
 }
 
@@ -53,7 +53,8 @@ export default async function handler(req, res) {
   if (!APP_ID || !APP_SECRET) return res.status(200).send(page({ type: 'meta-discovery', state, error: 'META_APP_ID/META_APP_SECRET not set in the Vercel env' }, origin));
   if (error || !code) return res.status(200).send(page({ type: 'meta-discovery', state, error: String(error || 'login cancelled / no code') }, origin));
   try {
-    const redirect = `${origin}/api/meta-oauth-callback`;
+    // Must EXACTLY match the redirect used in /api/meta-oauth-start (Meta enforces it) — same pin.
+    const redirect = process.env.META_OAUTH_REDIRECT || `${origin}/api/meta-oauth-callback`;
     const tokUrl = `${GRAPH}/oauth/access_token?client_id=${encodeURIComponent(APP_ID)}&client_secret=${encodeURIComponent(APP_SECRET)}&redirect_uri=${encodeURIComponent(redirect)}&code=${encodeURIComponent(code)}`;
     const tok = await (await fetch(tokUrl)).json();
     const token = tok.access_token;
