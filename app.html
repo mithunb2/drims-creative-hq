@@ -1496,7 +1496,13 @@ function _injectMetaSetupCSS(){
   .ms-chk.ok{background:#f0fdf4;color:#15803d}.ms-chk.no{background:#fef2f2;color:#dc2626}
   .ms-chk b{min-width:180px}.ms-chk span{color:var(--mut);font-size:11.5px}
   .ms-ready{font-weight:700;font-size:12.5px;padding:7px 10px;border-radius:8px;margin-top:2px}
-  .ms-ready.ok{background:#dcfce7;color:#15803d}.ms-ready.no{background:#fef2f2;color:#dc2626}`;
+  .ms-ready.ok{background:#dcfce7;color:#15803d}.ms-ready.no{background:#fef2f2;color:#dc2626}
+  .ms-connect{grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px dashed var(--border,#e5e7eb)}
+  .ms-fb{background:#1877f2}.ms-cstat{font-size:12px;color:var(--mut)}
+  .ms-disc{grid-column:1/-1;display:flex;flex-direction:column;gap:9px}
+  .ms-disc select,.ms-row select{padding:7px 9px;border:1px solid var(--border,#e5e7eb);border-radius:8px;font-size:12.5px;font-family:inherit;background:var(--card,#fff)}
+  .ms-assets{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .ms-pgwarn{grid-column:1/-1;font-size:12px}.ms-ok{color:#15803d}`;
   document.head.appendChild(s);
 }
 async function _mountMetaSetup(wrap,slug){
@@ -1508,6 +1514,10 @@ async function _mountMetaSetup(wrap,slug){
   wrap.innerHTML='';
   const card=el(`<details class="ms-card"><summary><i data-lucide="settings-2"></i> Meta Setup — <b>${_esc(slug)}</b><span class="ms-tok ${data.token_set?'ok':'no'}">${data.token_set?'token set ✓':'no token'}</span></summary></details>`);
   const form=el('<div class="ms-form"></div>');
+  const connect=el('<div class="ms-connect"><button class="ms-btn ms-fb"><i data-lucide="facebook"></i> Connect Facebook (autofill)</button><span class="ms-status ms-cstat">— or fill the fields manually below (fallback)</span></div>');
+  const dpanel=el('<div class="ms-disc"></div>');
+  form.appendChild(connect); form.appendChild(dpanel);
+  connect.querySelector('button').addEventListener('click',()=>_fbConnect(dpanel,form,connect.querySelector('.ms-cstat')));
   F.forEach(([k,label])=>form.appendChild(el(`<label class="ms-row"><span>${label}</span><input data-k="${k}" value="${_esc(c[k]||'')}" placeholder="${_esc(label)}"></label>`)));
   const cfgAct=el('<div class="ms-actions"></div>');
   const saveCfg=el('<button class="ms-btn">Save config</button>'),cfgSt=el('<span class="ms-status"></span>');
@@ -1534,6 +1544,53 @@ async function _mountMetaSetup(wrap,slug){
   });
   tokAct.appendChild(saveTok);tokAct.appendChild(tokSt);form.appendChild(tokAct);
   card.appendChild(form); wrap.appendChild(card); icons();
+}
+
+// OAuth DISCOVERY: log in once (popup) → app enumerates BMs/accounts/pages/pixels → dropdowns fill the
+// form. The OAuth token stays SERVER-SIDE (discovery-only, never stored); runtime uses the system-user
+// token. Pages show BM-owned ✓ / CLIENT ⚠ so the client-page trap is caught before saving.
+function _dd(label,opts){
+  const wrap=el('<label class="ms-row"><span>'+_esc(label)+'</span></label>');
+  const s=el('<select class="sel"></select>');
+  s.innerHTML='<option value="">— pick '+_esc(label)+' —</option>'+opts.map(([v,t])=>`<option value="${_esc(v)}">${_esc(t)}</option>`).join('');
+  wrap.appendChild(s); return {wrap,el:s};
+}
+function _fbConnect(panel,form,stat){
+  const state='drims_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
+  stat.textContent='Opening Facebook login…';
+  window.open('/api/meta-oauth-start?state='+encodeURIComponent(state),'fbconnect','width=680,height=760');
+  function onMsg(e){
+    const d=e.data; if(!d||d.type!=='meta-discovery'||d.state!==state) return;
+    window.removeEventListener('message',onMsg);
+    if(d.error){ stat.innerHTML='<span class="ms-warn">'+_esc(d.error)+'</span>'; return; }
+    const bms=(d.data&&d.data.businesses)||[];
+    stat.textContent=bms.length?('Connected ✓ — '+bms.length+' business(es) found — pick below':'Connected, but no businesses visible to this login');
+    _renderDiscovery(panel,form,bms);
+  }
+  window.addEventListener('message',onMsg);
+}
+function _renderDiscovery(panel,form,bms){
+  panel.innerHTML=''; if(!bms.length) return;
+  const setInput=(k,v)=>{const i=form.querySelector('input[data-k="'+k+'"]'); if(i) i.value=v||'';};
+  const bmSel=el('<select class="sel"></select>');
+  bmSel.innerHTML='<option value="">— pick Business Manager —</option>'+bms.map((b,i)=>`<option value="${i}">${_esc(b.name||b.business_manager_id)}</option>`).join('');
+  const bmRow=el('<label class="ms-row"><span>Business Manager (discovered)</span></label>'); bmRow.appendChild(bmSel);
+  const assets=el('<div class="ms-assets"></div>');
+  panel.appendChild(bmRow); panel.appendChild(assets);
+  bmSel.addEventListener('change',()=>{
+    const b=bms[+bmSel.value]; assets.innerHTML=''; if(!b) return;
+    setInput('business_manager_id',b.business_manager_id);
+    const acc=_dd('Ad account',(b.ad_accounts||[]).map(a=>[a.ad_account_id,(a.name||a.ad_account_id)+' · '+a.ad_account_id+(a.bm_owned?'':' ⚠ client')]));
+    acc.el.addEventListener('change',()=>setInput('ad_account_id',acc.el.value));
+    const pg=_dd('Page',(b.pages||[]).map(p=>[p.page_id,(p.name||p.page_id)+(p.bm_owned?'  ✓ BM-owned':'  ⚠ CLIENT — will fail')]));
+    const pgWarn=el('<div class="ms-pgwarn"></div>');
+    pg.el.addEventListener('change',()=>{ setInput('page_id',pg.el.value); const p=(b.pages||[]).find(x=>x.page_id===pg.el.value);
+      pgWarn.innerHTML=(p&&!p.bm_owned)?'<span class="ms-warn">⚠ CLIENT page — dev-mode creative creation will FAIL. Pick a BM-owned page.</span>':(p?'<span class="ms-ok">✓ BM-owned — safe to launch.</span>':''); });
+    const px=_dd('Pixel',(b.pixels||[]).map(p=>[p.pixel_id,(p.name||p.pixel_id)])); px.el.addEventListener('change',()=>setInput('pixel_id',px.el.value));
+    const cc=_dd('Custom conversion',(b.custom_conversions||[]).map(c=>[c.custom_conversion_id,(c.name||c.custom_conversion_id)])); cc.el.addEventListener('change',()=>setInput('custom_conversion_id',cc.el.value));
+    const ig=_dd('Instagram actor',(b.ig_accounts||[]).map(g=>[g.ig_actor_id,(g.username||g.ig_actor_id)])); ig.el.addEventListener('change',()=>setInput('ig_actor_id',ig.el.value));
+    [acc,pg].forEach(x=>assets.appendChild(x.wrap)); assets.appendChild(pgWarn); [px,cc,ig].forEach(x=>assets.appendChild(x.wrap));
+  });
 }
 
 function _renderChecks(c){
