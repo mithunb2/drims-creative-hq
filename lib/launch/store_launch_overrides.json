@@ -8,7 +8,7 @@
       "custom_conversion_id": "1556941682754848",
       "ig_actor_id": "17841467676192975",
       "default_landing": "https://drimsally.com/",
-      "note": "TEST OVERRIDE (Lolis test account). CCA-named launches build on the $20 Lolis test account, never CCA's real act_797306028304336. Remove after the rehearsal."
+      "note": "TEST OVERRIDE (Lolis test account). page_id = Emily Parker (893953403798866) — must be BM-OWNED + assigned to the 'Launch Automation' system user (Create content + Advertise) for the ad creative to build in dev mode. Remove entry after the rehearsal."
     }
   }
 }

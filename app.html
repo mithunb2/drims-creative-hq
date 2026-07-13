@@ -543,6 +543,7 @@ table.tbl tbody tr:hover{background:var(--bg)}
     <button data-tab="inspo"><i data-lucide="lightbulb"></i>Inspirations</button>
     <button data-tab="teamx"><i data-lucide="users"></i>Team</button>
     <button data-tab="pipeline"><i data-lucide="split"></i>Launch Pipeline</button>
+    <button data-tab="liveads"><i data-lucide="radio"></i>Live Ads</button>
   </nav>
   <main>
     <div class="stalebar" id="staleBar"><i data-lucide="alert-triangle"></i><span id="staleMsg"></span></div>
@@ -957,7 +958,7 @@ function routeTo(tab){
   location.hash=tab;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
-  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,teamx:viewTeamUnified,pipeline:viewPipeline}[tab]||viewOverview)();
+  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,teamx:viewTeamUnified,pipeline:viewPipeline,liveads:viewLiveAds}[tab]||viewOverview)();
   icons();
 }
 
@@ -965,18 +966,28 @@ function routeTo(tab){
    split/launch views verbatim (mounted into #stageMount — only where they render changes). Stage 2
    is a READ-ONLY reflection of launch_holds (the pipeline's single source of truth): SELECT-only,
    no writes, no launch-API contact, no gate involvement. ─────────────────────────────────────── */
-let _pipeData={jobs:[],holds:[]};
+let _pipeData={jobs:[],holds:[]}; let _pipeAll={jobs:[],holds:[]}; let _pipeStore='';
+// Store-scoping (Part 2): _pipeData is the store-filtered view of _pipeAll; empty _pipeStore = all.
+function _applyStoreFilter(){
+  if(!_pipeStore){ _pipeData={jobs:_pipeAll.jobs,holds:_pipeAll.holds}; return; }
+  const jobs=_pipeAll.jobs.filter(j=>j.store_slug===_pipeStore);
+  const ids=new Set(jobs.map(j=>j.id));
+  _pipeData={jobs,holds:_pipeAll.holds.filter(h=>ids.has(h.job_id))};
+}
 async function viewPipeline(){
   const v=$('#view'); v.innerHTML=''; charts.length=0;
   const [jobs,holds]=await Promise.all([safe('launch_jobs'),safe('launch_holds')]);   // READ-ONLY
-  _pipeData={jobs,holds};
-  const inPipe=holds.filter(h=>h.clickup_task_id&&!h.promoted_at).length;
-  const promoted=holds.filter(h=>h.promoted_at).length;
-  const njobs=jobs.length;
+  _pipeAll={jobs,holds}; _applyStoreFilter();
+  const dh=_pipeData.holds, dj=_pipeData.jobs;
+  const inPipe=dh.filter(h=>h.clickup_task_id&&!h.promoted_at).length;
+  const promoted=dh.filter(h=>h.promoted_at).length;
+  const njobs=dj.length;
+  const _slugs=[...new Map(jobs.map(j=>[j.store_slug,j.store_name||j.store_slug])).entries()];
+  const _picker=`<select class="sel" id="pipeStoreSel"><option value="">All stores</option>${_slugs.map(([s,n])=>`<option value="${_esc(s)}" ${s===_pipeStore?'selected':''}>${_esc(n)}</option>`).join('')}</select>`;
   const stage=(n,ic,t,sub,foot,cls)=>`<button class="pl-stage${cls?' '+cls:''}" data-stage="${n}">
     <div class="pl-stop"><span class="pl-ic"><i data-lucide="${ic}"></i></span><span class="pl-sn">STAGE ${n}</span></div>
     <div class="pl-st">${t}</div><div class="pl-ss">${sub}</div><div class="pl-foot">${foot}</div></button>`;
-  v.appendChild(el(viewHead('split','Launch Pipeline','One doc → tasks → editor delivers → Production → launch · Phase&nbsp;1 live, the launch step is server-gated.','')));
+  v.appendChild(el(viewHead('split','Launch Pipeline','One doc → tasks → editor delivers → Production → launch · <b>store-scoped</b> — a store launches only to its own configured account.',_picker)));
   v.appendChild(el(`<div class="pl-rail">
     ${stage(1,'file-up','Upload &amp; Split','Doc → N tasks',`<span class="pl-n">${njobs}</span><span class="pl-nl">job${njobs===1?'':'s'}</span>`)}
     ${stage(2,'list-checks','In Production','Review delivered creatives',`<span class="pl-n">${inPipe}</span><span class="pl-nl">in flight · ${promoted} delivered</span>`)}
@@ -990,6 +1001,7 @@ async function viewPipeline(){
   const go=e=>{const b=e.target.closest('[data-stage]'); if(b) mountStage(+b.dataset.stage);};
   v.querySelector('.pl-seg').addEventListener('click',go);
   v.querySelector('.pl-rail').addEventListener('click',go);
+  const _ps=$('#pipeStoreSel'); if(_ps) _ps.addEventListener('change',e=>{_pipeStore=e.target.value; viewPipeline();});
   mountStage(_pipeStage);
   icons();
 }
@@ -1389,6 +1401,129 @@ function viewPipeSchedule(mount){
   v.appendChild(wrap); icons();
 }
 
+/* ── LIVE ADS — per-ad direct Live/Pause toggle. Reflects REAL Meta effective_status (meta_ads,
+   mirrored read-only by meta_ads_sync). Flip → POST /api/ad-toggle records intent → local
+   ad_toggle_worker applies it on Meta (ASL-gated). ASL = the spend ceiling; activation is refused
+   on an account with no spending limit. Per-ad — one toggle controls only its own ad. ───────── */
+function _injectLiveAdsCSS(){
+  if($('#la-css'))return;
+  const s=document.createElement('style'); s.id='la-css';
+  s.textContent=`
+  .la-head h2{display:flex;align-items:center;gap:8px;margin:2px 0 4px}
+  .la-head .la-sub{color:var(--mut);font-size:13px;max-width:760px;margin:0 0 16px}
+  .la-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+  .la-card{border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:14px 16px;background:var(--card,#fff);display:flex;flex-direction:column;gap:10px}
+  .la-card.is-live{border-color:#16a34a;box-shadow:0 0 0 1px #16a34a22}
+  .la-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .la-name{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .la-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .b-live{background:#dcfce7;color:#15803d}.b-paused{background:#f1f5f9;color:#64748b}
+  .la-meta{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--mut)}
+  .la-meta i{width:13px;height:13px;vertical-align:-2px;margin-right:3px}
+  .la-noasl{color:#dc2626;font-weight:600}
+  .la-toggle{display:inline-flex;align-items:center;gap:9px;border:none;cursor:pointer;border-radius:999px;padding:5px 14px 5px 6px;font-weight:700;font-size:12.5px;width:max-content;transition:.15s}
+  .la-toggle .la-knob{width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:.15s}
+  .la-toggle.off{background:#e2e8f0;color:#475569}
+  .la-toggle.on{background:#16a34a;color:#fff}.la-toggle.on .la-knob{transform:translateX(2px)}
+  .la-toggle:disabled{opacity:.55;cursor:default}
+  .la-status{font-size:12px;color:var(--mut);min-height:16px}
+  .la-warn{color:#b45309}.la-err{font-size:11.5px;color:#dc2626}`;
+  document.head.appendChild(s);
+}
+
+async function viewLiveAds(mount){
+  const v=mount||$('#view'); v.innerHTML=''; _injectLiveAdsCSS();
+  const [ads,accts]=await Promise.all([safe('meta_ads'),safe('meta_accounts')]);
+  const acctById={}; (accts||[]).forEach(a=>acctById[a.account_id]=a);
+  v.appendChild(el(`<div class="la-head"><h2><i data-lucide="radio"></i> Live Ads</h2>
+    <p class="la-sub">Flip an ad <b>live</b> (goes ACTIVE on Meta — spends real money, capped by the account's ASL) or <b>pause</b> it. Per-ad, direct control. The <b>ASL is the spend ceiling</b>; an ad can't go live on an account with no spending limit.</p></div>`));
+  if(!ads||!ads.length){ v.appendChild(emptyState('radio','No synced ads yet','Build a PAUSED ad on the account, then run meta_ads_sync — it appears here with a live/pause toggle.')); icons(); return; }
+  const wrap=el('<div class="la-grid"></div>');
+  ads.forEach(ad=>{
+    const acct=acctById[ad.account_id]||{};
+    const hasAsl=acct.spend_cap_cents&&Number(acct.spend_cap_cents)>0;
+    const asl=hasAsl?('$'+(acct.spend_cap_cents/100).toFixed(2)):'NONE';
+    const live=ad.effective_status==='ACTIVE';
+    const pending=ad.desired_status&&((ad.desired_status==='ACTIVE')!==live);
+    const card=el(`<div class="la-card ${live?'is-live':''}">
+      <div class="la-top"><span class="la-name">${_esc(ad.name||ad.ad_id)}</span>
+        <span class="la-badge ${live?'b-live':'b-paused'}">${pending?'PENDING…':(live?'● LIVE':'❚❚ PAUSED')}</span></div>
+      <div class="la-meta"><span><i data-lucide="megaphone"></i>${_esc(ad.account_id)}</span>
+        <span class="${hasAsl?'':'la-noasl'}"><i data-lucide="shield"></i>ASL ${asl}</span>
+        <span><i data-lucide="activity"></i>${_esc(ad.effective_status||'?')}</span></div>
+      ${ad.last_error?`<div class="la-err">${_esc(ad.last_error)}</div>`:''}</div>`);
+    const sw=el(`<button class="la-toggle ${live?'on':'off'}" ${pending?'disabled':''} title="${live?'Pause this ad':'Set LIVE (spends, ASL-capped)'}"><span class="la-knob"></span><span>${live?'Live':'Paused'}</span></button>`);
+    const status=el('<div class="la-status"></div>');
+    if(!hasAsl&&!live) status.innerHTML='<span class="la-warn">No ASL on this account — activation is refused until a spending limit is set.</span>';
+    sw.addEventListener('click',()=>_toggleAd(ad,live?'PAUSED':'ACTIVE',sw,status));
+    card.appendChild(sw); card.appendChild(status); wrap.appendChild(card);
+  });
+  v.appendChild(wrap); icons();
+}
+
+async function _toggleAd(ad,desired,sw,status){
+  sw.disabled=true; status.textContent=desired==='ACTIVE'?'Requesting live…':'Requesting pause…';
+  try{
+    const r=await fetch('/api/ad-toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ad_id:ad.ad_id,desired})});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===202){ status.innerHTML='<b>'+(desired==='ACTIVE'?'Going live':'Pausing')+'…</b> applying on Meta — <b>refresh</b> to confirm real status.'; }
+    else if(r.status===409){ status.innerHTML='<span class="la-warn">'+_esc(d.reason||'Refused — no spending limit.')+'</span>'; sw.disabled=false; }
+    else { status.textContent='Error: '+(d.reason||d.error||r.status); sw.disabled=false; }
+  }catch(e){ status.textContent='Network error: '+e.message; sw.disabled=false; }
+}
+
+/* ── META SETUP — per-store Meta identity (Part 1). View/edit non-secret config; the system-user
+   token is WRITE-ONLY (never displayed back). Config → /api/store-meta, token → /api/store-meta-token
+   (service-key; token isolated in store_meta_secrets, RLS deny-read). ────────────────────────── */
+function _injectMetaSetupCSS(){
+  if($('#ms-css'))return; const s=document.createElement('style'); s.id='ms-css';
+  s.textContent=`
+  .ms-card{border:1px solid var(--border,#e5e7eb);border-radius:12px;margin:0 0 16px;background:var(--card,#fff)}
+  .ms-card>summary{cursor:pointer;padding:12px 14px;font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:8px;list-style:none}
+  .ms-card>summary::-webkit-details-marker{display:none}
+  .ms-tok{margin-left:auto;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+  .ms-tok.ok{background:#dcfce7;color:#15803d}.ms-tok.no{background:#fef2f2;color:#dc2626}
+  .ms-form{padding:4px 14px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .ms-row{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--mut)}
+  .ms-row input{padding:7px 9px;border:1px solid var(--border,#e5e7eb);border-radius:8px;font-size:12.5px;font-family:inherit}
+  .ms-token{grid-column:1/-1;border-top:1px dashed var(--border,#e5e7eb);padding-top:12px;margin-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .ms-actions{grid-column:1/-1;display:flex;align-items:center;gap:10px}
+  .ms-btn{background:#111827;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:12.5px;cursor:pointer}
+  .ms-btn2{background:#7c3aed}.ms-status{font-size:12px;color:var(--mut)}`;
+  document.head.appendChild(s);
+}
+async function _mountMetaSetup(wrap,slug){
+  _injectMetaSetupCSS(); wrap.innerHTML='<div class="ms-card" style="padding:12px 14px;color:var(--mut)">Loading Meta Setup…</div>';
+  let data={config:null,token_set:false};
+  try{ const r=await fetch('/api/store-meta?slug='+encodeURIComponent(slug)); if(r.ok) data=await r.json(); }catch(e){}
+  const c=data.config||{};
+  const F=[['business_manager_id','Business Manager ID'],['ad_account_id','Ad Account ID (act_…)'],['page_id','Page ID (BM-owned)'],['pixel_id','Pixel ID'],['custom_conversion_id','Custom Conversion ID'],['ig_actor_id','Instagram Actor ID'],['default_landing','Default Landing URL'],['currency','Currency']];
+  wrap.innerHTML='';
+  const card=el(`<details class="ms-card"><summary><i data-lucide="settings-2"></i> Meta Setup — <b>${_esc(slug)}</b><span class="ms-tok ${data.token_set?'ok':'no'}">${data.token_set?'token set ✓':'no token'}</span></summary></details>`);
+  const form=el('<div class="ms-form"></div>');
+  F.forEach(([k,label])=>form.appendChild(el(`<label class="ms-row"><span>${label}</span><input data-k="${k}" value="${_esc(c[k]||'')}" placeholder="${_esc(label)}"></label>`)));
+  const cfgAct=el('<div class="ms-actions"></div>');
+  const saveCfg=el('<button class="ms-btn">Save config</button>'),cfgSt=el('<span class="ms-status"></span>');
+  saveCfg.addEventListener('click',async()=>{
+    const payload={slug}; form.querySelectorAll('input[data-k]').forEach(i=>payload[i.dataset.k]=i.value.trim());
+    cfgSt.textContent='Saving…';
+    try{ const r=await fetch('/api/store-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const d=await r.json().catch(()=>({})); cfgSt.textContent=r.ok?'Saved ✓':(d.error||'Error'); }catch(e){cfgSt.textContent='Network error';}
+  });
+  cfgAct.appendChild(saveCfg);cfgAct.appendChild(cfgSt);form.appendChild(cfgAct);
+  const tok=el(`<div class="ms-token"><label class="ms-row"><span>System-user token (write-only)</span><input type="password" id="msTok" placeholder="paste token — never shown back"></label><label class="ms-row"><span>App secret</span><input type="password" id="msSec" placeholder="paste app secret"></label></div>`);
+  form.appendChild(tok);
+  const tokAct=el('<div class="ms-actions"></div>');
+  const saveTok=el('<button class="ms-btn ms-btn2">Save token</button>'),tokSt=el('<span class="ms-status"></span>');
+  saveTok.addEventListener('click',async()=>{
+    const t=$('#msTok').value.trim(),s=$('#msSec').value.trim();
+    if(!t||!s){tokSt.textContent='Enter token + app secret';return;}
+    tokSt.textContent='Saving…';
+    try{ const r=await fetch('/api/store-meta-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug,system_user_token:t,app_secret:s})}); const d=await r.json().catch(()=>({})); tokSt.textContent=r.ok?'Token set ✓ (refresh to see badge)':(d.error||'Error'); $('#msTok').value='';$('#msSec').value=''; }catch(e){tokSt.textContent='Network error';}
+  });
+  tokAct.appendChild(saveTok);tokAct.appendChild(tokSt);form.appendChild(tokAct);
+  card.appendChild(form); wrap.appendChild(card); icons();
+}
+
 /* OVERVIEW — command center */
 // single source of truth for stage display (label / colour / icon)
 const STAGE_META={
@@ -1684,6 +1819,7 @@ function renderDeepDive(){
   charts.length=0;
   const ads=adsForStore(selectedStore),body=$('#ddBody');body.innerHTML='';
   $('#ddTotal').textContent=`${ads.length} creatives`;
+  const _ms=el('<div id="metaSetup"></div>');body.appendChild(_ms);_mountMetaSetup(_ms,selectedStore);
   if(!ads.length){body.appendChild(emptyState('inbox','No creatives in this store yet','As tasks land in this store\'s ClickUp lists, they appear after the next 10-min sync.'));icons();return;}
   const c=s=>ads.filter(a=>stageOf(a)===s).length,wins=ads.filter(isWinner),losers=ads.filter(isLoser);
   body.appendChild(el(`<div class="kpis">
