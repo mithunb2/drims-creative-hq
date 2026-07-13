@@ -1489,7 +1489,14 @@ function _injectMetaSetupCSS(){
   .ms-token{grid-column:1/-1;border-top:1px dashed var(--border,#e5e7eb);padding-top:12px;margin-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .ms-actions{grid-column:1/-1;display:flex;align-items:center;gap:10px}
   .ms-btn{background:#111827;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:12.5px;cursor:pointer}
-  .ms-btn2{background:#7c3aed}.ms-status{font-size:12px;color:var(--mut)}`;
+  .ms-btn2{background:#7c3aed}.ms-test{background:#0d9488}.ms-status{font-size:12px;color:var(--mut)}.ms-warn{color:#b45309;font-size:12px}
+  .ms-testres{grid-column:1/-1;display:flex;flex-direction:column;gap:5px;margin-top:2px}
+  .ms-chk{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:5px 9px;border-radius:8px}
+  .ms-chk i{width:15px;height:15px;flex:none}
+  .ms-chk.ok{background:#f0fdf4;color:#15803d}.ms-chk.no{background:#fef2f2;color:#dc2626}
+  .ms-chk b{min-width:180px}.ms-chk span{color:var(--mut);font-size:11.5px}
+  .ms-ready{font-weight:700;font-size:12.5px;padding:7px 10px;border-radius:8px;margin-top:2px}
+  .ms-ready.ok{background:#dcfce7;color:#15803d}.ms-ready.no{background:#fef2f2;color:#dc2626}`;
   document.head.appendChild(s);
 }
 async function _mountMetaSetup(wrap,slug){
@@ -1509,7 +1516,12 @@ async function _mountMetaSetup(wrap,slug){
     cfgSt.textContent='Saving…';
     try{ const r=await fetch('/api/store-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const d=await r.json().catch(()=>({})); cfgSt.textContent=r.ok?'Saved ✓':(d.error||'Error'); }catch(e){cfgSt.textContent='Network error';}
   });
-  cfgAct.appendChild(saveCfg);cfgAct.appendChild(cfgSt);form.appendChild(cfgAct);
+  const testBtn=el('<button class="ms-btn ms-test"><i data-lucide="plug-zap"></i> Test connection</button>'),testRes=el('<div class="ms-testres"></div>');
+  testBtn.addEventListener('click',async()=>{
+    testRes.innerHTML='<span class="ms-status">Testing… (read-only — no launch, no spend)</span>';
+    try{ const r=await fetch('/api/store-meta-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug})}); const d=await r.json().catch(()=>({})); testRes.innerHTML=r.ok?_renderChecks(d.checks):('<span class="ms-warn">'+_esc(d.error||('HTTP '+r.status))+'</span>'); icons(); }catch(e){ testRes.innerHTML='<span class="ms-warn">Network error</span>'; }
+  });
+  cfgAct.appendChild(saveCfg);cfgAct.appendChild(testBtn);cfgAct.appendChild(cfgSt);form.appendChild(cfgAct);form.appendChild(testRes);
   const tok=el(`<div class="ms-token"><label class="ms-row"><span>System-user token (write-only)</span><input type="password" id="msTok" placeholder="paste token — never shown back"></label><label class="ms-row"><span>App secret</span><input type="password" id="msSec" placeholder="paste app secret"></label></div>`);
   form.appendChild(tok);
   const tokAct=el('<div class="ms-actions"></div>');
@@ -1522,6 +1534,19 @@ async function _mountMetaSetup(wrap,slug){
   });
   tokAct.appendChild(saveTok);tokAct.appendChild(tokSt);form.appendChild(tokAct);
   card.appendChild(form); wrap.appendChild(card); icons();
+}
+
+function _renderChecks(c){
+  if(!c) return '<span class="ms-warn">no result</span>';
+  const row=(label,ok,detail)=>`<div class="ms-chk ${ok?'ok':'no'}"><i data-lucide="${ok?'check-circle-2':'x-circle'}"></i><b>${label}</b><span>${_esc(detail||'')}</span></div>`;
+  let h='';
+  h+=row('Token valid',c.token_valid.ok,c.token_valid.who?('as '+c.token_valid.who):c.token_valid.detail);
+  h+=row('Account reachable',c.account.ok,[c.account.name,c.account.detail].filter(Boolean).join(' · '));
+  h+=row('ASL (spend ceiling)',c.asl.ok,c.asl.detail);
+  h+=row('Page tasks (Create+Advertise)',c.page_tasks.ok,c.page_tasks.detail);
+  h+=row('Page BM-owned',c.page_bm_owned.ok,c.page_bm_owned.detail);
+  h+=`<div class="ms-ready ${c.ready?'ok':'no'}">${c.ready?'✓ READY — this store can launch':'✗ NOT READY — fix the red checks before launching'}</div>`;
+  return h;
 }
 
 /* OVERVIEW — command center */
