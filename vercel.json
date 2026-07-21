@@ -1,7 +1,8 @@
 {
   "functions": {
-    "api/*.js": { "maxDuration": 10 },
-    "api/clickup-tasks.js": { "maxDuration": 60 }
+    "api/*.js": {
+      "maxDuration": 60
+    }
   },
   "rewrites": [
     {
