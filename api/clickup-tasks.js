@@ -21,6 +21,43 @@
 const TOKEN = process.env.CLICKUP_LAUNCH_TOKEN || '';
 const API = 'https://api.clickup.com/api/v2';
 
+// ── AUTH GATE ───────────────────────────────────────────────────────────────
+// This endpoint reads the WHOLE ClickUp workspace with a privileged server token, so it must
+// never answer an unauthenticated caller. The app's sign-in screen gates the UI only — a
+// serverless function is reachable directly, so the check has to live HERE.
+//
+// The caller must present the Supabase session JWT the browser already holds
+// (app.html `_accessToken()`). We verify it against Supabase's own /auth/v1/user endpoint:
+// a forged or expired token fails there, so validity is Supabase's decision, not ours.
+// Same fallback pattern as api/launch-edit.js. The anon key is public by design (it is served
+// to every browser in config.js) — it identifies the project, it does not grant access. The JWT
+// presented by the caller is what actually decides.
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
+  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplYXp0bGNvcGt2bGZ6aXdybXRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMzk1MzEsImV4cCI6MjA5MjYxNTUzMX0.T9fXxkmHOAH6g6IG4-krLXxuj7tqzOn54WDeHsqFh3Y';
+
+async function requireUser(req) {
+  const hdr = req.headers['authorization'] || req.headers['Authorization'] || '';
+  const jwt = hdr.startsWith('Bearer ') ? hdr.slice(7).trim() : '';
+  if (!jwt) return { ok: false, code: 401, reason: 'Sign in to view ClickUp data.' };
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    // Fail CLOSED: without a way to verify, we refuse rather than serve the workspace.
+    return { ok: false, code: 500, reason: 'Auth is not configured on the server (SUPABASE_URL / SUPABASE_ANON_KEY missing).' };
+  }
+  try {
+    const r = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${jwt}`, apikey: SUPABASE_ANON_KEY },
+    });
+    if (!r.ok) return { ok: false, code: 401, reason: 'Session expired or invalid — sign in again.' };
+    const u = await r.json();
+    if (!u || !u.id) return { ok: false, code: 401, reason: 'Session expired or invalid — sign in again.' };
+    return { ok: true, user: u.email || u.id };
+  } catch {
+    return { ok: false, code: 401, reason: 'Could not verify your session.' };
+  }
+}
+
 const PROD_STATUSES = (process.env.CLICKUP_PROD_STATUSES || 'ready for testing,testing,scale')
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
@@ -138,6 +175,12 @@ async function loadTasks(folderId, mode) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
+
+  // Gate FIRST — before touching the ClickUp token or answering anything about the workspace.
+  const auth = await requireUser(req);
+  if (!auth.ok) {
+    return res.status(auth.code).json({ ok: false, reason: auth.reason, stores: [], tasks: [] });
+  }
 
   if (!TOKEN) {
     return res.status(200).json({

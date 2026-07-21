@@ -2509,7 +2509,11 @@ function _wlDeadlineMs(off){const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'
 let _cuStores=null,_cuStore='',_cuListOnly=false,_cuMeta='';
 
 async function _cuApi(qs){
-  const r=await fetch('/api/clickup-tasks?'+qs);
+  // Send the Supabase session JWT — the endpoint refuses unauthenticated callers, so the
+  // ClickUp workspace is never readable from the bare preview/production URL.
+  const jwt=await _accessToken();
+  if(!jwt)return {ok:false,reason:'Not signed in — sign in to view ClickUp data.'};
+  const r=await fetch('/api/clickup-tasks?'+qs,{headers:{Authorization:'Bearer '+jwt}});
   try{return await r.json();}catch(e){return {ok:false,reason:'bad response from /api/clickup-tasks'};}
 }
 
