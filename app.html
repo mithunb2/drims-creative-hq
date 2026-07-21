@@ -2494,104 +2494,50 @@ const WL_UNSTARTED=new Set(['to do','todo','to-do','not started','open','backlog
 const WL_PRIO={urgent:0,high:1,normal:2,low:3};
 function _wlDeadlineMs(off){const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(Date.now()+off*864e5);return new Date(ds+'T23:59:00+05:30').getTime();}
 /* ══ ClickUp Production Tasks ═══════════════════════════════════════════════════════════════
-   Reads tasks LIVE from ClickUp via the existing /api/clickup proxy (the buyer's own token).
-   Independent of the Supabase meta tables — works whether or not those are applied.
+   Reads LIVE from ClickUp through /api/clickup-tasks, which uses the SERVER-SIDE
+   CLICKUP_LAUNCH_TOKEN. No buyer token, nothing in localStorage, no paste screen.
+   Independent of the Supabase meta tables — renders whether or not those are applied.
 
-   STORE-AGNOSTIC: the store list is DISCOVERED at runtime (team → space → folder). No store
-   slug, folder id, or list id appears in this code. Every store the token can see shows up.
+   AUTO-DISCOVERING: the store dropdown is built from whatever ClickUp returns
+   (team -> space -> folder). No store name, folder id or list id exists in this code or in the
+   endpoint. Add a website/folder in ClickUp and it appears here on the next load — no deploy.
 
-   NOTE ON "PRODUCTION": in this workspace the team advances creatives by STATUS, not by list —
-   the per-store "Production" LIST is empty while production-stage tasks sit in Creative Pipeline
-   at status "ready for testing". So this view scans ALL lists in the store's folder and filters
-   by status, and shows which list each task actually came from. The status set is editable below. */
-const CU_PROD_STATUSES=['ready for testing','testing','scale'];
-let _cuStores=null,_cuStore='',_cuTasks=null,_cuBusy=false,_cuErr='',_cuListOnly=false;
+   NOTE ON "PRODUCTION": this workspace advances creatives by STATUS, not by list — the per-store
+   "Production" LIST is empty while production-stage tasks sit in Creative Pipeline at
+   "ready for testing". So the default scans every list in the store's folder and filters by
+   status, labelling which list each task came from. The toggle exposes literal-list behaviour. */
+let _cuStores=null,_cuStore='',_cuListOnly=false,_cuMeta='';
 
-async function _cuDiscoverStores(){
-  if(_cuStores)return _cuStores;
-  const teams=await _cuGet('/team'); if(!teams)throw new Error('token');
-  const out=[];
-  for(const t of (teams.teams||[])){
-    const sp=await _cuGet('/team/'+t.id+'/space'); if(!sp)continue;
-    for(const s of (sp.spaces||[])){
-      const fo=await _cuGet('/space/'+s.id+'/folder'); if(!fo)continue;
-      for(const f of (fo.folders||[])){
-        const lists=(f.lists||[]).map(l=>({id:l.id,name:l.name}));
-        if(lists.length) out.push({id:f.id,name:f.name,space:s.name,lists});
-      }
-    }
-  }
-  out.sort((a,b)=>a.name.localeCompare(b.name));
-  _cuStores=out; return out;
+async function _cuApi(qs){
+  const r=await fetch('/api/clickup-tasks?'+qs);
+  try{return await r.json();}catch(e){return {ok:false,reason:'bad response from /api/clickup-tasks'};}
 }
-
-const _cuIsProdList=n=>/production/i.test(n||'');
-
-async function _cuLoadTasks(folder){
-  const lists=_cuListOnly?folder.lists.filter(l=>_cuIsProdList(l.name)):folder.lists;
-  const seen=new Map();
-  for(const l of lists){
-    const d=await _cuGet('/list/'+l.id+'/task?include_closed=true&subtasks=false');
-    for(const t of ((d&&d.tasks)||[])){
-      const st=(t.status&&t.status.status||'').toLowerCase();
-      if(!_cuListOnly&&!CU_PROD_STATUSES.includes(st))continue;
-      t._list=l.name; seen.set(t.id,t);
-    }
-  }
-  return [...seen.values()].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-}
-
-/* resolve a ClickUp custom field to a display string (dropdowns store an index) */
-function _cuField(t,name){
-  const cf=(t.custom_fields||[]).find(c=>(c.name||'').toLowerCase()===name.toLowerCase());
-  if(!cf)return null;
-  const v=cf.value;
-  if(v===null||v===undefined||v==='')return null;
-  if(cf.type==='drop_down'){
-    const opts=(cf.type_config&&cf.type_config.options)||[];
-    const o=opts.find(x=>x.orderindex===v)||opts[v];
-    return o?(o.name||o.label||null):null;
-  }
-  if(cf.type==='labels'&&Array.isArray(v)){
-    const opts=(cf.type_config&&cf.type_config.options)||[];
-    return v.map(id=>{const o=opts.find(x=>x.id===id);return o?o.label||o.name:id;}).join(', ');
-  }
-  return String(v);
-}
-const _cuDriveId=u=>{const m=String(u||'').match(/\/d\/([A-Za-z0-9_-]{10,})/)||String(u||'').match(/[?&]id=([A-Za-z0-9_-]{10,})/);return m?m[1]:null;};
 
 async function viewCUTasks(){
   const v=$('#view'); v.innerHTML=''; charts.length=0;
   v.appendChild(el(viewHead('clapperboard','ClickUp Production Tasks',
-    'Live from ClickUp — every production-stage task with its brief, angle and delivered video. Independent of the Supabase meta tables.')));
-
-  if(!_cuTokenQuiet()){
-    v.appendChild(el('<div class="panel" style="text-align:center;padding:38px 20px;max-width:520px;margin:0 auto">'
-      +'<h3 style="margin:0 0 6px">Connect ClickUp</h3>'
-      +'<p class="ph-sub" style="margin:0 auto 16px">This view reads your ClickUp tasks directly. Your personal token stays in this browser only.</p>'
-      +'<button class="rev-btn" id="cuConnect"><i data-lucide="link"></i>Paste ClickUp token</button></div>'));
-    $('#cuConnect').addEventListener('click',()=>{_cuToken();_cuStores=null;viewCUTasks();});
-    icons();return;
-  }
+    'Live from ClickUp — every store discovered automatically, with each task\'s brief, angle and delivered video.')));
 
   const bar=el('<div class="panel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">'
     +'<label class="ph-sub" style="font-size:12px">Store</label>'
-    +'<select id="cuStoreSel" style="min-width:230px;padding:7px 9px"><option value="">Loading stores…</option></select>'
+    +'<select id="cuStoreSel" style="min-width:240px;padding:7px 9px"><option value="">Discovering stores…</option></select>'
     +'<label class="ph-sub" style="font-size:12px;display:flex;align-items:center;gap:6px;margin-left:auto">'
     +'<input type="checkbox" id="cuListOnly"'+(_cuListOnly?' checked':'')+'> Production <b>list</b> only</label>'
     +'<span class="ph-sub" style="font-size:11.5px" id="cuCount"></span></div>');
   v.appendChild(bar);
-  const body=el('<div id="cuBody"></div>'); v.appendChild(body);
+  v.appendChild(el('<div id="cuBody"></div>'));
 
-  let stores=[];
-  try{stores=await _cuDiscoverStores();}
-  catch(e){body.innerHTML='';body.appendChild(emptyState('alert-triangle','ClickUp token rejected','Re-paste your token — the saved one didn\'t authenticate.'));icons();return;}
-
+  const d=await _cuApi('action=stores');
+  if(!d.ok){
+    $('#cuBody').appendChild(emptyState('alert-triangle','Can\'t reach ClickUp',d.reason||'Unknown error.'));
+    $('#cuStoreSel').innerHTML='<option value="">unavailable</option>';icons();return;
+  }
+  _cuStores=d.stores||[];
   const sel=$('#cuStoreSel');
-  sel.innerHTML='<option value="">Select a store…</option>'+stores.map(s=>
-    `<option value="${_esc(s.id)}"${s.id===_cuStore?' selected':''}>${_esc(s.name)}</option>`).join('');
-  sel.addEventListener('change',async e=>{_cuStore=e.target.value;_cuTasks=null;await _cuRender();});
-  $('#cuListOnly').addEventListener('change',async e=>{_cuListOnly=e.target.checked;_cuTasks=null;await _cuRender();});
+  sel.innerHTML='<option value="">Select a store… ('+_cuStores.length+' found)</option>'
+    +_cuStores.map(s=>`<option value="${_esc(s.id)}"${s.id===_cuStore?' selected':''}>${_esc(s.name)}</option>`).join('');
+  sel.addEventListener('change',async e=>{_cuStore=e.target.value;await _cuRender();});
+  $('#cuListOnly').addEventListener('change',async e=>{_cuListOnly=e.target.checked;await _cuRender();});
   await _cuRender();
   icons();
 }
@@ -2599,32 +2545,34 @@ async function viewCUTasks(){
 async function _cuRender(){
   const body=$('#cuBody'),cnt=$('#cuCount'); if(!body)return;
   const folder=(_cuStores||[]).find(s=>s.id===_cuStore);
-  if(!folder){body.innerHTML='';body.appendChild(emptyState('store','Pick a store','Choose a store above to load its production tasks from ClickUp.'));cnt.textContent='';icons();return;}
-  body.innerHTML='<div class="panel" style="text-align:center;padding:30px"><span class="ph-sub">Loading tasks from ClickUp…</span></div>';
-  let tasks=[];
-  try{tasks=await _cuLoadTasks(folder);}
-  catch(e){body.innerHTML='';body.appendChild(emptyState('alert-triangle','Couldn\'t load tasks',String(e.message||e)));icons();return;}
-  _cuTasks=tasks;
-  cnt.textContent=`${tasks.length} task${tasks.length===1?'':'s'} · ${folder.name}`;
+  if(!folder){
+    body.innerHTML='';
+    body.appendChild(emptyState('store','Pick a store',
+      `${(_cuStores||[]).length} stores discovered live from ClickUp. Choose one to load its production tasks.`));
+    cnt.textContent='';icons();return;
+  }
+  body.innerHTML='<div class="panel" style="text-align:center;padding:30px"><span class="ph-sub">Loading '+_esc(folder.name)+' from ClickUp…</span></div>';
+  const d=await _cuApi('action=tasks&folder='+encodeURIComponent(folder.id)+(_cuListOnly?'&mode=list':''));
+  if(!d.ok){body.innerHTML='';body.appendChild(emptyState('alert-triangle','Couldn\'t load tasks',d.reason||'Unknown error.'));icons();return;}
+  const tasks=d.tasks||[];
+  cnt.textContent=`${tasks.length} task${tasks.length===1?'':'s'} · ${_esc(folder.name)} · ${d.lists_scanned} list${d.lists_scanned===1?'':'s'} scanned`;
   if(!tasks.length){
     body.innerHTML='';
     body.appendChild(emptyState('inbox','No production tasks here',
-      _cuListOnly?`The "Production" list in ${folder.name} is empty. Untick “Production list only” to see tasks that are at a production status inside other lists.`
-                 :`No task in ${folder.name} is at status ${CU_PROD_STATUSES.map(s=>'“'+s+'”').join(' / ')}.`));
+      _cuListOnly?`The "Production" list in ${folder.name} is empty. Untick "Production list only" to see tasks sitting at a production status in other lists.`
+                 :`No task in ${folder.name} is at status ${(d.prod_statuses||[]).map(s=>'"'+s+'"').join(' / ')}.`));
     icons();return;
   }
   body.innerHTML=tasks.map(_cuCard).join('');
   icons();
 }
 
+const _cuDriveId=u=>{const m=String(u||'').match(/\/d\/([A-Za-z0-9_-]{10,})/)||String(u||'').match(/[?&]id=([A-Za-z0-9_-]{10,})/);return m?m[1]:null;};
+
 function _cuCard(t){
-  const drive=_cuField(t,'Drive Link'),did=_cuDriveId(drive);
-  const angle=_cuField(t,'Angle'),persona=_cuField(t,'Persona');
-  const chips=[['Format','Format'],['Hook Type','Hook Type'],['Creative Tone','Creative Tone'],
-               ['Funnel Stage','Funnel Stage'],['Platform','Platform'],['Video Style','Video Style']]
-    .map(([lbl,f])=>{const val=_cuField(t,f);return val?`<span class="tag">${_esc(lbl)}: ${_esc(val)}</span>`:'';}).join('');
-  const who=(t.assignees||[]).map(a=>_esc(a.username||a.email||'')).join(', ')||'—';
-  const st=_esc((t.status&&t.status.status)||'—');
+  const drive=t.drive_link,did=_cuDriveId(drive);
+  const chips=Object.entries(t.chips||{}).map(([k,v])=>`<span class="tag">${_esc(k)}: ${_esc(v)}</span>`).join('');
+  const who=(t.assignees||[]).map(_esc).join(', ')||'—';
   const desc=(t.description||'').trim();
   return `<div class="panel" style="margin-bottom:12px;padding:0;overflow:hidden">
     <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;flex-wrap:wrap">
@@ -2635,17 +2583,15 @@ function _cuCard(t){
       <div style="flex:1;min-width:240px">
         <div style="display:flex;gap:9px;align-items:baseline;flex-wrap:wrap">
           <b style="font-size:15px">${_esc(t.name||'Untitled')}</b>
-          <span class="tag">${st}</span>
-          <span class="ph-sub" style="font-size:11.5px">${_esc(t._list||'')}</span>
+          <span class="tag">${_esc(t.status||'—')}</span>
+          <span class="ph-sub" style="font-size:11.5px">${_esc(t.list||'')}</span>
           <a class="rev-btn" style="margin-left:auto" href="${_esc(t.url||'#')}" target="_blank" rel="noopener"><i data-lucide="external-link"></i>ClickUp</a>
         </div>
-        <div class="ph-sub" style="font-size:12px;margin-top:5px">
-          <code>${_esc(t.id)}</code> · ${_esc(who)}
-        </div>
-        ${angle?`<div style="margin-top:9px"><span class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em">Angle</span>
-          <div style="font-size:13.5px;margin-top:2px">${_esc(angle)}</div></div>`:''}
-        ${persona?`<div style="margin-top:7px"><span class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em">Persona</span>
-          <div style="font-size:13px;margin-top:2px">${_esc(persona)}</div></div>`:''}
+        <div class="ph-sub" style="font-size:12px;margin-top:5px"><code>${_esc(t.id)}</code> · ${who}</div>
+        ${t.angle?`<div style="margin-top:9px"><span class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em">Angle</span>
+          <div style="font-size:13.5px;margin-top:2px">${_esc(t.angle)}</div></div>`:''}
+        ${t.persona?`<div style="margin-top:7px"><span class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em">Persona</span>
+          <div style="font-size:13px;margin-top:2px">${_esc(t.persona)}</div></div>`:''}
         ${chips?`<div class="tags" style="margin-top:9px">${chips}</div>`:''}
         ${drive?`<div style="margin-top:10px"><a class="rev-btn" href="${_esc(drive)}" target="_blank" rel="noopener"><i data-lucide="film"></i>Open video in Drive</a></div>`:
                 `<div class="ph-sub" style="margin-top:10px;font-size:12px">No Drive link on this task yet.</div>`}
