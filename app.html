@@ -2567,7 +2567,12 @@ async function _cuRender(){
                  :`No task in ${folder.name} is at status ${(d.prod_statuses||[]).map(s=>'"'+s+'"').join(' / ')}.`));
     icons();return;
   }
-  body.innerHTML=tasks.map(_cuCard).join('');
+  // A ClickUp blip on one list must be visible, not silently shown as "fewer tasks".
+  const warn=d.partial?`<div class="panel" style="margin-bottom:12px;border-left:3px solid #d9a641">
+    <b>Partial load</b> — ${d.errors.length} list${d.errors.length===1?'':'s'} failed, so tasks may be missing:
+    <div class="ph-sub" style="font-size:12px;margin-top:5px">${_esc(d.errors.join(' · '))}</div>
+    <div class="ph-sub" style="font-size:12px;margin-top:5px">Reload the store to retry.</div></div>`:'';
+  body.innerHTML=warn+tasks.map(_cuCard).join('');
   icons();
 }
 

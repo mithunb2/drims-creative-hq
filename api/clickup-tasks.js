@@ -153,15 +153,24 @@ async function loadTasks(folderId, mode) {
 
   const lists = mode === 'list' ? folder.lists.filter((l) => isProdList(l.name)) : folder.lists;
 
-  // Parallel across lists — a folder with one oversized list no longer stalls the whole load.
+  // Let ClickUp do the status filtering — it halves the payload and the time versus pulling
+  // every task (incl. closed) and filtering here. Measured on one real list: 88 tasks / 1437KB
+  // -> 39 tasks / 650KB. Only applies to status mode; list mode wants everything in the list.
+  const statusQS = mode === 'list' ? ''
+    : PROD_STATUSES.map((s) => `&statuses%5B%5D=${encodeURIComponent(s)}`).join('');
+  const closedQS = mode === 'list' ? '&include_closed=true' : '';
+
+  // Parallel across lists — one oversized list no longer stalls the whole load.
+  const errors = [];
   const perList = await Promise.all(lists.map(async (l) => {
     try {
-      const d = await cu(`/list/${l.id}/task?include_closed=true&subtasks=false`);
-      return (d.tasks || [])
-        .filter((t) => mode === 'list'
-          || PROD_STATUSES.includes(((t.status && t.status.status) || '').toLowerCase()))
-        .map((t) => slim(t, l.name));
-    } catch { return []; }
+      const d = await cu(`/list/${l.id}/task?subtasks=false${closedQS}${statusQS}`);
+      return (d.tasks || []).map((t) => slim(t, l.name));
+    } catch (e) {
+      // Do NOT swallow: a ClickUp blip must not masquerade as "this store has no tasks".
+      errors.push(`${l.name}: ${(e && e.message) || e}`);
+      return [];
+    }
   }));
 
   const seen = new Map();
@@ -170,6 +179,8 @@ async function loadTasks(folderId, mode) {
     tasks: [...seen.values()].sort((a, b) => a.name.localeCompare(b.name)),
     lists_scanned: lists.length,
     folder: folder.name,
+    partial: errors.length > 0,
+    errors,
   };
 }
 
