@@ -15,6 +15,7 @@ import crypto from 'node:crypto';
 import { resolveOptions, buildPlan, applyEdits, LaunchOptionError } from '../lib/launch/options.js';
 import { extractAdCopy, holdsQuery, holdsByTaskId, parseDocLink, fetchDocText } from '../lib/launch/ad_copy.js';
 import { norm } from '../lib/launch/registry.js';
+import { planInputsHash, signPreviewToken } from '../lib/launch/plan_hash.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
@@ -143,7 +144,14 @@ export default async function handler(req, res) {
       for (const f of formats) rendered[f] = await preview(plan.account_id, spec, f, token, proof);
       out.push({ task_id: ad.task_id, name: ad.name, kind: ad.video_id ? 'video' : 'thumbnail', previews: rendered });
     }
-    return res.status(200).json({ ok: true, account_id: plan.account_id, page_id: pageId, formats, ads: out });
+    // Item-4 live guard: a preview token bound to (user, exact inputs). The live-launch path in
+    // /api/launch-group-submit requires it — so a live launch is impossible without having rendered
+    // a preview of THIS plan. Any later edit changes the hash and invalidates the token.
+    const rendered_any = out.some((a) => a.previews && Object.values(a.previews).some((p) => p.ok));
+    const preview_token = rendered_any
+      ? signPreviewToken(auth.user, planInputsHash({ store_slug: slug, task_ids: taskIds, options: body.options, edits: body.edits }), SERVICE(), Date.now())
+      : null;
+    return res.status(200).json({ ok: true, account_id: plan.account_id, page_id: pageId, formats, ads: out, preview_token });
   } catch (err) {
     console.error('[api/launch-preview] error:', err);
     return res.status(500).json({ ok: false, reason: String((err && err.message) || err) });

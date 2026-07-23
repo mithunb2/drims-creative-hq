@@ -32,6 +32,7 @@ import { readFileSync } from 'node:fs';
 import { resolveOptions, buildPlan, applyEdits, totalDailySpend, planSummary, LaunchOptionError } from '../lib/launch/options.js';
 import { extractAdCopy, holdsQuery, holdsByTaskId, parseDocLink, fetchDocText } from '../lib/launch/ad_copy.js';
 import { norm } from '../lib/launch/registry.js';
+import { planInputsHash, verifyPreviewToken } from '../lib/launch/plan_hash.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
@@ -210,10 +211,12 @@ export default async function handler(req, res) {
         reason: `page '${plan.page_id}' is not ${slug}'s configured page` });
     }
 
-    // ── PAUSED invariant (structural; the engine emits nothing else). ──
-    if (plan.status !== 'PAUSED' || plan.do_activate) {
-      return res.status(400).json({ ok: false, reason: 'plan must be PAUSED with do_activate=false' });
+    // ── Objects are ALWAYS created PAUSED first (even a live launch), so this invariant holds for
+    // both modes. do_activate is set below, only after the live-guard conditions pass. ──
+    if (plan.status !== 'PAUSED') {
+      return res.status(400).json({ ok: false, reason: 'plan must build PAUSED' });
     }
+    const mode = body.mode === 'live' ? 'live' : (body.mode === 'paused' ? 'paused' : 'paused');
 
     // ── AD COPY (server-enforced): no ad launches without primary text. Checked on the FINAL
     // plan (after applyEdits), so extraction from ClickUp/launch_holds AND operator-typed copy
@@ -256,27 +259,54 @@ export default async function handler(req, res) {
         reason: `computed TRUE total daily spend $${total.toFixed(2)} exceeds the ASL headroom $${headroomUsd.toFixed(2)} — lower the budget or raise the ASL` });
     }
 
-    // ── security gate: armed by the button, fired only by the flag. ──
+    // ── LIVE GUARD (Lock B) — only for mode:'live'. All conditions are server-enforced; the client
+    // UI mirrors them but cannot substitute for them. A PAUSED build (mode:'paused') skips this
+    // entirely — it never activates, so it needs only the infra flag below. ──
+    let audit = null;
+    if (mode === 'live') {
+      // (a) a preview of THIS EXACT plan must have been rendered (token bound to user + inputs hash).
+      const inputsHash = planInputsHash({ store_slug: slug, task_ids: taskIds, options: body.options, edits: body.edits });
+      const pv = verifyPreviewToken(body.preview_token, auth.user, inputsHash, SERVICE(), Date.now());
+      if (!pv.ok) return res.status(403).json({ ok: false, status: 'preview_required', reason: `live launch requires a fresh ad preview — ${pv.reason}` });
+      // (b) typed confirmation must match the COMPUTED true daily spend, to the cent.
+      const confirmed = Number(body.confirm_daily_spend);
+      if (!(Math.round(confirmed * 100) === Math.round(total * 100))) {
+        return res.status(403).json({ ok: false, status: 'confirm_mismatch',
+          reason: `type the TRUE total daily spend ($${total.toFixed(2)}) to confirm a live launch — got $${Number.isFinite(confirmed) ? confirmed.toFixed(2) : String(body.confirm_daily_spend)}` });
+      }
+      // (c) arm it: objects still build PAUSED; do_activate tells the worker to activate atomically
+      //     at the END (campaign last), and only if the infra flag + worker ASL re-check pass.
+      plan.do_activate = true;
+      audit = { armed_by: auth.user, armed_at: new Date().toISOString(), plan_hash: inputsHash,
+        confirmed_daily_usd: total, mode: 'live' };
+    }
+
+    // ── Lock A (infrastructure) — META_LAUNCH_ALLOW_LIVE_WRITES. Independent of, and ABOVE, the
+    // live guard: off ⇒ nothing queues/builds/activates in EITHER mode. ──
     if (process.env.META_LAUNCH_ALLOW_LIVE_WRITES !== '1') {
       return res.status(403).json({ ok: false, status: 'blocked_by_security_gate',
         reason: 'Launches are disabled. Set META_LAUNCH_ALLOW_LIVE_WRITES=1 in the Vercel env to enable Publish.',
         summary: planSummary(plan) });
     }
 
-    // ── ENQUEUE. Nothing is written to Meta here — the grouped build worker does that, PAUSED. ──
+    // ── ENQUEUE. The worker builds the campaign/ad sets/ads PAUSED; for a live launch it then
+    // activates atomically at the end (campaign last), gated again by the infra flag + a build-time
+    // ASL re-check. audit records who armed a live launch, when, and the plan hash. ──
     const row = {
       store_slug: slug, store_name: cfg.store_name || slug, account_id: plan.account_id,
       buyer: auth.user, editor_name: '—',                     // grouped launches have no doc editor
-      campaign_config: { type: 'grouped_launch', options: body.options || {}, edits: body.edits || null },
+      campaign_config: { type: 'grouped_launch', options: body.options || {}, edits: body.edits || null, mode, audit },
       entry_count: plan.adsets.reduce((s, a) => s + a.ads.length, 0),
       status: 'done',                                          // NEVER 'pending' — intake must not fan this out
-      overrides: { build: { status: 'requested_grouped', do_activate: false, plan,
+      overrides: { build: { status: 'requested_grouped', do_activate: plan.do_activate === true, mode, audit, plan,
         requested_at: new Date().toISOString(), source: 'grouped_publish_button' } },
     };
     const ins = await svc('launch_jobs', { method: 'POST', body: JSON.stringify(row), headers: { Prefer: 'return=representation' } });
     return res.status(202).json({ ok: true, status: 'grouped_build_queued', job_id: ins && ins[0] && ins[0].id,
-      summary: planSummary(plan),
-      message: 'PAUSED grouped build queued. The launch worker will create the campaign/ad sets/ads paused — nothing activates; you review + activate in Ads Manager.' });
+      mode, summary: planSummary(plan),
+      message: mode === 'live'
+        ? `LIVE grouped launch queued. The worker builds PAUSED, then activates atomically at the end (campaign last). True daily spend $${total.toFixed(2)}.`
+        : 'PAUSED grouped build queued. The worker creates the campaign/ad sets/ads paused — nothing activates; you review + activate in Ads Manager.' });
   } catch (err) {
     console.error('[api/launch-group-submit] error:', err);
     return res.status(500).json({ ok: false, reason: String((err && err.message) || err) });

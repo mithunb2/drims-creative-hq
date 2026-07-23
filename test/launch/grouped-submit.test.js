@@ -342,3 +342,84 @@ test('extractAdCopy: per-field priority hold > description > doc', () => {
   assert.equal(c.headline, 'Hold HL');       // hold wins
   assert.equal(c.primary_text, 'Hold body');
 });
+
+// ── item 4: live guard (plan hash + preview token + typed confirm + activate) ─
+import { planInputsHash, signPreviewToken, verifyPreviewToken } from '../../lib/launch/plan_hash.js';
+
+test('plan_hash: token round-trips; input change or wrong user invalidates', () => {
+  const inp = { store_slug: 's', task_ids: ['b', 'a'], options: { daily_budget_usd: 10 }, edits: null };
+  const h = planInputsHash(inp);
+  assert.equal(h, planInputsHash({ ...inp, task_ids: ['a', 'b'] }));          // task order ignored
+  const tok = signPreviewToken('u@x', h, 'key', 1000);
+  assert.equal(verifyPreviewToken(tok, 'u@x', h, 'key', 2000).ok, true);
+  assert.match(verifyPreviewToken(tok, 'other@x', h, 'key', 2000).reason, /different user/);
+  const h2 = planInputsHash({ ...inp, options: { daily_budget_usd: 11 } });
+  assert.match(verifyPreviewToken(tok, 'u@x', h2, 'key', 2000).reason, /plan changed/);
+  assert.match(verifyPreviewToken(tok, 'u@x', h, 'key', 999999999).reason, /expired/);
+  assert.match(verifyPreviewToken('garbage', 'u@x', h, 'key', 2000).reason, /token/);
+});
+
+const LIVE = { ...BODY, mode: 'live' };
+test('endpoint: mode:live WITHOUT preview token -> 403 preview_required', async () => {
+  const restore = mockFetch({ folderName: 'Fixture Store' });
+  try { await withEnv(async () => {
+    process.env.META_LAUNCH_ALLOW_LIVE_WRITES = '1';
+    const res = mockRes();
+    await handler(REQ(LIVE), res);
+    assert.equal(res._status, 403);
+    assert.equal(res._json.status, 'preview_required');
+  }); } finally { restore(); }
+});
+
+test('endpoint: mode:live with valid token but WRONG confirm -> 403 confirm_mismatch', async () => {
+  const restore = mockFetch({ folderName: 'Fixture Store' });
+  try { await withEnv(async () => {
+    process.env.META_LAUNCH_ALLOW_LIVE_WRITES = '1';
+    const tok = signPreviewToken('op@example.com', planInputsHash({ store_slug: 'fixture_store', task_ids: LIVE.task_ids, options: LIVE.options, edits: undefined }), 'svc', Date.now());
+    const res = mockRes();
+    await handler(REQ({ ...LIVE, preview_token: tok, confirm_daily_spend: 999 }), res);   // true total is 10, not 999
+    assert.equal(res._status, 403);
+    assert.equal(res._json.status, 'confirm_mismatch');
+  }); } finally { restore(); }
+});
+
+test('endpoint: mode:live with token + correct confirm + flag ON -> 202, do_activate true + audit', async () => {
+  let inserted = null;
+  const restore = mockFetch({ folderName: 'Fixture Store' });
+  const orig = global.fetch;
+  global.fetch = async (url, init) => {
+    if (String(url).includes('launch_jobs') && init && init.method === 'POST') inserted = JSON.parse(init.body);
+    return orig(url, init);
+  };
+  try { await withEnv(async () => {
+    process.env.META_LAUNCH_ALLOW_LIVE_WRITES = '1';
+    const tok = signPreviewToken('op@example.com', planInputsHash({ store_slug: 'fixture_store', task_ids: LIVE.task_ids, options: LIVE.options, edits: undefined }), 'svc', Date.now());
+    const res = mockRes();
+    await handler(REQ({ ...LIVE, preview_token: tok, confirm_daily_spend: 10 }), res);   // CBO-ish; total = 10
+    assert.equal(res._status, 202);
+    assert.equal(res._json.mode, 'live');
+    assert.equal(inserted.overrides.build.do_activate, true);
+    assert.equal(inserted.overrides.build.plan.do_activate, true);
+    assert.equal(inserted.overrides.build.audit.armed_by, 'op@example.com');
+    assert.equal(inserted.overrides.build.audit.confirmed_daily_usd, 10);
+  }); } finally { global.fetch = orig; restore(); }
+});
+
+test('endpoint: mode:paused (default) never activates + skips the live guard', async () => {
+  let inserted = null;
+  const restore = mockFetch({ folderName: 'Fixture Store' });
+  const orig = global.fetch;
+  global.fetch = async (url, init) => {
+    if (String(url).includes('launch_jobs') && init && init.method === 'POST') inserted = JSON.parse(init.body);
+    return orig(url, init);
+  };
+  try { await withEnv(async () => {
+    process.env.META_LAUNCH_ALLOW_LIVE_WRITES = '1';
+    const res = mockRes();
+    await handler(REQ(BODY), res);   // no mode -> paused; no preview token needed
+    assert.equal(res._status, 202);
+    assert.equal(res._json.mode, 'paused');
+    assert.equal(inserted.overrides.build.do_activate, false);
+    assert.equal(inserted.overrides.build.audit, null);
+  }); } finally { global.fetch = orig; restore(); }
+});

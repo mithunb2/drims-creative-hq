@@ -2737,6 +2737,19 @@ async function _cuLaunchModal(){
 
         <button id="lmPvBtn" class="rev-btn" style="justify-content:center"><i data-lucide="eye"></i>Render ad preview</button>
         <button id="lmGo" class="rev-btn" style="justify-content:center;font-weight:600"><i data-lucide="rocket"></i>Publish (builds PAUSED)</button>
+        <!-- Item 4: live guard. Default LOCKED (details closed, unarmed) every time the modal opens
+             — never sticky. Lives BELOW the infra flag (META_LAUNCH_ALLOW_LIVE_WRITES), which the
+             server checks independently. -->
+        <details id="lmGuardBox" style="border:1px solid rgba(192,57,43,.4);border-radius:8px;padding:0 12px">
+          <summary style="cursor:pointer;padding:9px 0;font-size:12px;color:#c0392b;font-weight:600">⚠ Go live — builds ACTIVE &amp; spends immediately</summary>
+          <div style="padding-bottom:10px;display:flex;flex-direction:column;gap:7px">
+            <label style="font-size:12px"><input type="checkbox" id="lmArm"> Arm live launch <span class="ph-sub" style="font-size:11px">(resets every open)</span></label>
+            <div id="lmArmConds" class="ph-sub" style="font-size:11.5px"></div>
+            <label class="ph-sub" style="font-size:12px">Type the TRUE daily spend to confirm: $<b id="lmConfirmTotal">0</b>
+              <input id="lmConfirm" type="number" step="0.01" placeholder="e.g. 18.00" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+            <button id="lmLive" class="rev-btn" style="justify-content:center;font-weight:600;border-color:#c0392b;color:#c0392b" disabled><i data-lucide="zap"></i>Go LIVE</button>
+          </div>
+        </details>
         <div id="lmMsg" class="ph-sub" style="font-size:12.5px"></div>
       </div>
       <div>
@@ -2755,6 +2768,24 @@ async function _cuLaunchModal(){
   // by TASK ID — not by (adset,ad) index — so they survive videos_per_adset regrouping.
   const nameEdits={campaign:null,adsets:{}};
   const adEdits=new Map();   // task_id -> {name?, headline?, primary_text?}
+  let pvToken=null;          // item 4: preview token from the last render; ANY plan edit clears it
+  let lastTotal=0;           // last computed TRUE daily spend (for the live confirm)
+  // Any plan change invalidates a rendered preview (the token is bound to the exact inputs).
+  const invalidatePreview=()=>{ pvToken=null; if($m('#lmPvPanel'))$m('#lmPvPanel').innerHTML='<span class="ph-sub">Plan changed — re-render the preview.</span>'; syncGuard(); };
+  function syncGuard(){
+    const armed=$m('#lmArm')&&$m('#lmArm').checked;
+    if($m('#lmConfirmTotal'))$m('#lmConfirmTotal').textContent=lastTotal.toFixed(2);
+    const typed=Number($m('#lmConfirm')&&$m('#lmConfirm').value);
+    const confirmOk=Math.round(typed*100)===Math.round(lastTotal*100)&&lastTotal>0;
+    const ready=armed&&!!pvToken&&confirmOk;
+    const live=$m('#lmLive'); if(live)live.disabled=!ready;
+    const c=$m('#lmArmConds');
+    if(c)c.innerHTML=[
+      `${pvToken?'✓':'✗'} ad preview rendered for this exact plan`,
+      `${confirmOk?'✓':'✗'} typed spend matches $${lastTotal.toFixed(2)}`,
+      `${armed?'✓':'✗'} armed`,
+    ].map(t=>`<div>${t}</div>`).join('')+`<div class="ph-sub" style="margin-top:3px">Server re-checks store/task, ASL, preview + confirmation; the infra flag is separate and above this.</div>`;
+  }
   const setAdEdit=(tid,k,v)=>{const e=adEdits.get(tid)||{};e[k]=v;adEdits.set(tid,e);};
   const storeCfg=()=>cfgs.find(c=>c.store_slug===$m('#lmStore').value)||{};
   const fillIdentity=()=>{const c=storeCfg();$m('#lmAcct').value=c.ad_account_id||'';$m('#lmPage').value=c.page_id||'';};
@@ -2817,8 +2848,9 @@ async function _cuLaunchModal(){
     }catch(ex){err=ex.message;}
     const mode=ov.querySelector('input[name=lmMode]:checked').value;
     $m('#lmBudLbl').textContent=mode==='CBO'?'Daily budget (campaign) $':'Daily budget PER AD SET $';
-    if(err){$m('#lmPrev').innerHTML='<span class="ms-warn">'+_esc(err)+'</span>';$m('#lmTrueTotal').textContent='';return null;}
+    if(err){$m('#lmPrev').innerHTML='<span class="ms-warn">'+_esc(err)+'</span>';$m('#lmTrueTotal').textContent='';lastTotal=0;syncGuard();return null;}
     const total=eng.totalDailySpend(plan);
+    lastTotal=total;
     // ABO truth: the entered number is PER AD SET — surface the real total loudly.
     $m('#lmTrueTotal').innerHTML=mode==='ABO'
       ?`TRUE total: ${plan.adsets.length} ad set${plan.adsets.length===1?'':'s'} × $${(plan.adsets[0]&&plan.adsets[0].daily_budget_usd||0)} = <b>$${total.toFixed(2)}/day</b>`
@@ -2853,18 +2885,21 @@ async function _cuLaunchModal(){
       else if(k.startsWith('an|'))setAdEdit(k.slice(3),'name',e.target.value);
       else if(k.startsWith('ah|'))setAdEdit(k.slice(3),'headline',e.target.value);
       else if(k.startsWith('ap|'))setAdEdit(k.slice(3),'primary_text',e.target.value);
-      recompute();}));
+      invalidatePreview();recompute();}));
     const go=$m('#lmGo');
     go.disabled=noCopy.length>0;
     go.title=noCopy.length?`${noCopy.length} ad(s) have no primary text — write copy in the red boxes first`:'';
     if(noCopy.length)$m('#lmMsg').innerHTML=`<span class="ms-warn">${noCopy.length} ad(s) missing copy — Publish disabled (server refuses these too).</span>`;
     else if(($m('#lmMsg').textContent||'').includes('missing copy'))$m('#lmMsg').innerHTML='';
+    syncGuard();
     icons();
     return plan;
   }
-  ['#lmObj','#lmBudget','#lmCap','#lmPer','#lmDays','#lmTgt','#lmAcct','#lmPage'].forEach(s=>$m(s).addEventListener('input',recompute));
-  ov.querySelectorAll('input[name=lmMode]').forEach(r=>r.addEventListener('change',recompute));
-  $m('#lmStore').addEventListener('change',()=>{fillIdentity();recompute();loadNames().then(recompute);});
+  // Any plan input change: recompute AND invalidate a rendered preview (its token is input-bound).
+  const onEdit=()=>{invalidatePreview();recompute();};
+  ['#lmObj','#lmBudget','#lmCap','#lmPer','#lmDays','#lmTgt','#lmAcct','#lmPage'].forEach(s=>$m(s).addEventListener('input',onEdit));
+  ov.querySelectorAll('input[name=lmMode]').forEach(r=>r.addEventListener('change',onEdit));
+  $m('#lmStore').addEventListener('change',()=>{invalidatePreview();fillIdentity();recompute();loadNames().then(recompute);});
   ['#lmAcct','#lmPage'].forEach(s=>$m(s).addEventListener('input',()=>loadNames()));
   recompute();
   loadNames().then(recompute);
@@ -2886,8 +2921,25 @@ async function _cuLaunchModal(){
           : `<div class="ms-warn" style="font-size:11px">${_esc(fmt)}: ${_esc(pv.error||'failed')}</div>`).join('');
         return `<div style="margin-bottom:14px;border-top:1px solid rgba(127,127,127,.18);padding-top:8px"><b style="font-size:12.5px">${_esc(ad.name)}</b>${frames}</div>`;
       }).join('')||'<span class="ph-sub">No ads to preview.</span>';
+      pvToken=j.preview_token||null; syncGuard();   // arm the live-guard precondition
     }catch(e){panel.innerHTML='<span class="ms-warn">'+_esc(String(e))+'</span>';}
     btn.disabled=false; icons();
+  });
+  // Guard interactions
+  if($m('#lmArm'))$m('#lmArm').addEventListener('change',syncGuard);
+  if($m('#lmConfirm'))$m('#lmConfirm').addEventListener('input',syncGuard);
+  $m('#lmLive').addEventListener('click',async()=>{
+    const plan=recompute(); if(!plan)return;
+    $m('#lmLive').disabled=true; $m('#lmMsg').innerHTML='<span class="ph-sub">Validating live launch server-side…</span>';
+    try{
+      const jwt=await _accessToken();
+      const r=await fetch('/api/launch-group-submit',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
+        body:JSON.stringify({folder_id:_cuStore,store_slug:$m('#lmStore').value,task_ids:selected.map(t=>t.id),
+          options:readOpts(),edits:readEdits(plan),mode:'live',preview_token:pvToken,confirm_daily_spend:Number($m('#lmConfirm').value)})});
+      const j=await r.json();
+      if(j.ok)$m('#lmMsg').innerHTML='<span class="ms-ok">🚀 '+_esc(j.message||j.status)+'</span>';
+      else{$m('#lmMsg').innerHTML='<span class="ms-warn">'+_esc(j.reason||j.status||('HTTP '+r.status))+'</span>';syncGuard();}
+    }catch(e){$m('#lmMsg').innerHTML='<span class="ms-warn">'+_esc(String(e))+'</span>';syncGuard();}
   });
 
   $m('#lmGo').addEventListener('click',async()=>{
