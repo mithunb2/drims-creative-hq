@@ -2735,11 +2735,16 @@ async function _cuLaunchModal(){
           </div>
         </details>
 
+        <button id="lmPvBtn" class="rev-btn" style="justify-content:center"><i data-lucide="eye"></i>Render ad preview</button>
         <button id="lmGo" class="rev-btn" style="justify-content:center;font-weight:600"><i data-lucide="rocket"></i>Publish (builds PAUSED)</button>
         <div id="lmMsg" class="ph-sub" style="font-size:12.5px"></div>
       </div>
-      <div><div class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Structure preview — live</div>
-        <div id="lmPrev" style="font-size:12.5px"></div></div>
+      <div>
+        <div class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Structure preview — live</div>
+        <div id="lmPrev" style="font-size:12.5px"></div>
+        <div class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 6px">Ad preview — Meta render</div>
+        <div id="lmPvPanel" class="ph-sub" style="font-size:12px">Click <b>Render ad preview</b> to see the real creative, copy and page in Meta's ad frame.</div>
+      </div>
     </div></div>`;
   document.body.appendChild(ov); icons();
   const $m=s=>ov.querySelector(s);
@@ -2863,6 +2868,27 @@ async function _cuLaunchModal(){
   ['#lmAcct','#lmPage'].forEach(s=>$m(s).addEventListener('input',()=>loadNames()));
   recompute();
   loadNames().then(recompute);
+
+  $m('#lmPvBtn').addEventListener('click',async()=>{
+    const plan=recompute(); if(!plan)return;
+    const btn=$m('#lmPvBtn'),panel=$m('#lmPvPanel');
+    btn.disabled=true; panel.innerHTML='<span class="ph-sub">Rendering in Meta…</span>';
+    try{
+      const jwt=await _accessToken();
+      const r=await fetch('/api/launch-preview',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
+        body:JSON.stringify({store_slug:$m('#lmStore').value,task_ids:selected.map(t=>t.id),options:readOpts(),edits:readEdits(plan)})});
+      const j=await r.json();
+      if(!j.ok){panel.innerHTML='<span class="ms-warn">'+_esc(j.reason||j.status||('HTTP '+r.status))+'</span>';btn.disabled=false;return;}
+      panel.innerHTML=(j.ads||[]).map(ad=>{
+        if(ad.skipped)return `<div style="margin-bottom:10px"><b>${_esc(ad.name)}</b> — <span class="ms-warn">${_esc(ad.skipped)}</span></div>`;
+        const frames=Object.entries(ad.previews||{}).map(([fmt,pv])=>pv.ok
+          ? `<div style="margin:6px 0"><div class="ph-sub" style="font-size:10.5px">${_esc(fmt)}${ad.kind==='thumbnail'?' · first-frame (video uploads at build)':''}</div>${pv.body}</div>`
+          : `<div class="ms-warn" style="font-size:11px">${_esc(fmt)}: ${_esc(pv.error||'failed')}</div>`).join('');
+        return `<div style="margin-bottom:14px;border-top:1px solid rgba(127,127,127,.18);padding-top:8px"><b style="font-size:12.5px">${_esc(ad.name)}</b>${frames}</div>`;
+      }).join('')||'<span class="ph-sub">No ads to preview.</span>';
+    }catch(e){panel.innerHTML='<span class="ms-warn">'+_esc(String(e))+'</span>';}
+    btn.disabled=false; icons();
+  });
 
   $m('#lmGo').addEventListener('click',async()=>{
     const plan=recompute(); if(!plan)return;
