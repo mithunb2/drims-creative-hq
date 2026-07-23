@@ -18,7 +18,7 @@
 // literals are ClickUp's own status vocabulary (below), which is workspace configuration, not a
 // store identity — override it with CLICKUP_PROD_STATUSES if the team renames its statuses.
 
-import { extractAdCopy, holdsQuery, holdsByTaskId } from '../lib/launch/ad_copy.js';
+import { extractAdCopy, holdsQuery, holdsByTaskId, parseDocLink, fetchDocText } from '../lib/launch/ad_copy.js';
 
 const TOKEN = process.env.CLICKUP_LAUNCH_TOKEN || '';
 const API = 'https://api.clickup.com/api/v2';
@@ -190,10 +190,18 @@ async function loadTasks(folderId, mode) {
       if (r.ok) holds = holdsByTaskId(await r.json());
     } catch { /* holds unreachable -> description-only extraction still works */ }
   }
-  for (const t of seen.values()) {
-    const copy = extractAdCopy({ holdAdCopy: holds.get(t.id) || null, description: t.description });
+  await Promise.all([...seen.values()].map(async (t) => {
+    let copy = extractAdCopy({ holdAdCopy: holds.get(t.id) || null, description: t.description });
+    // Doc tier (lazy): only when primary text is still missing AND the description links a doc.
+    if (!copy.primary_text) {
+      const link = parseDocLink(t.description);
+      if (link) {
+        const docText = await fetchDocText(link, TOKEN);
+        if (docText) copy = extractAdCopy({ holdAdCopy: holds.get(t.id) || null, description: t.description, docText });
+      }
+    }
     t.headline = copy.headline; t.primary_text = copy.primary_text;
-  }
+  }));
 
   return {
     tasks: [...seen.values()].sort((a, b) => a.name.localeCompare(b.name)),

@@ -311,3 +311,34 @@ test('endpoint: tasks whose folder MATCHES the config store pass the store gate 
     assert.equal(res._json.status, 'blocked_by_security_gate');
   }); } finally { restore(); }
 });
+
+// ── item 2: doc-link copy tier ──────────────────────────────────────────────
+import { parseDocLink } from '../../lib/launch/ad_copy.js';
+
+test('parseDocLink: extracts workspace + doc id from a ClickUp brief link', () => {
+  const d = '📄 Full creative brief: https://app.clickup.com/9013714387/v/dc/8cm4qek-32513/8cm4qek-30873';
+  assert.deepEqual(parseDocLink(d), { workspaceId: '9013714387', docId: '8cm4qek-32513' });
+  assert.equal(parseDocLink('no link here'), null);
+  assert.equal(parseDocLink(''), null);
+});
+
+test('extractAdCopy: doc tier fills MISSING primary; description keeps its headline', () => {
+  // the real case: headline in the task description, primary text only in the linked doc
+  const c = extractAdCopy({
+    holdAdCopy: null,
+    description: 'HEADLINE: FREE Today. $79 Tomorrow.\n(no primary here)',
+    docText: 'Soap Craft Academy\nPRIMARY COPY:\nPlease don\'t buy another last-minute gift card.',
+  });
+  assert.equal(c.headline, 'FREE Today. $79 Tomorrow.');            // from description
+  assert.equal(c.primary_text, 'Please don\'t buy another last-minute gift card.'); // from doc
+});
+
+test('extractAdCopy: per-field priority hold > description > doc', () => {
+  const c = extractAdCopy({
+    holdAdCopy: 'Headline: Hold HL\nPrimary text: Hold body',
+    description: 'HEADLINE: Desc HL\nPRIMARY COPY:\nDesc body',
+    docText: 'HEADLINE: Doc HL\nPRIMARY COPY:\nDoc body',
+  });
+  assert.equal(c.headline, 'Hold HL');       // hold wins
+  assert.equal(c.primary_text, 'Hold body');
+});

@@ -30,7 +30,7 @@
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolveOptions, buildPlan, applyEdits, totalDailySpend, planSummary, LaunchOptionError } from '../lib/launch/options.js';
-import { extractAdCopy, holdsQuery, holdsByTaskId } from '../lib/launch/ad_copy.js';
+import { extractAdCopy, holdsQuery, holdsByTaskId, parseDocLink, fetchDocText } from '../lib/launch/ad_copy.js';
 import { norm } from '../lib/launch/registry.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
@@ -89,7 +89,15 @@ async function fetchTasksById(taskIds) {
     if (!r.ok) throw new Error(`ClickUp ${r.status} on task ${id}`);
     const t = await r.json();
     const cf = (t.custom_fields || []).find((c) => (c.name || '').trim().toLowerCase() === 'drive link');
-    const copy = extractAdCopy({ holdAdCopy: holds.get(String(id)) || null, description: t.description || '' });
+    let copy = extractAdCopy({ holdAdCopy: holds.get(String(id)) || null, description: t.description || '' });
+    // Doc tier (lazy): fill missing primary text from the task's linked ClickUp doc.
+    if (!copy.primary_text) {
+      const link = parseDocLink(t.description || '');
+      if (link) {
+        const docText = await fetchDocText(link, CLICKUP_TOKEN());
+        if (docText) copy = extractAdCopy({ holdAdCopy: holds.get(String(id)) || null, description: t.description || '', docText });
+      }
+    }
     out.set(String(id), {
       task_id: t.id, id: t.id, name: t.name || '',
       drive_link: cf && cf.value ? String(cf.value) : null,

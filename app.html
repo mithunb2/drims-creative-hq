@@ -2691,32 +2691,50 @@ async function _cuLaunchModal(){
       <b style="font-size:16px">Publish ${selected.length} video${selected.length===1?'':'s'} to Meta</b>
       <button id="lmClose" class="rev-btn" style="margin-left:auto">Close</button></div>
     <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:18px;margin-top:16px;align-items:start">
-      <div id="lmForm" style="display:flex;flex-direction:column;gap:10px">
-        <label class="ph-sub" style="font-size:12px">Store config
-          <select id="lmStore" style="width:100%;padding:6px 8px;margin-top:3px">${cfgs.map(c=>`<option value="${_esc(c.store_slug)}"${c.store_slug===guess.store_slug?' selected':''}>${_esc(c.store_name||c.store_slug)}</option>`).join('')}</select></label>
-        <label class="ph-sub" style="font-size:12px">Campaign objective
-          <select id="lmObj" style="width:100%;padding:6px 8px;margin-top:3px">${eng.OBJECTIVES.map(o=>`<option>${o}</option>`).join('')}</select></label>
-        <div class="ph-sub" style="font-size:12px">Budget mode
-          <label style="margin-left:8px"><input type="radio" name="lmMode" value="CBO" checked> CBO</label>
-          <label style="margin-left:10px"><input type="radio" name="lmMode" value="ABO"> ABO</label></div>
-        <label class="ph-sub" style="font-size:12px"><span id="lmBudLbl">Daily budget (campaign) $</span>
-          <input id="lmBudget" type="number" min="0" step="1" value="0" style="width:100%;padding:6px 8px;margin-top:3px"></label>
-        <div id="lmTrueTotal" style="font-size:12.5px;font-weight:600"></div>
-        <label class="ph-sub" style="font-size:12px">Campaign spend cap $ (0 = none)
-          <input id="lmCap" type="number" min="0" step="1" value="0" style="width:100%;padding:6px 8px;margin-top:3px"></label>
-        <label class="ph-sub" style="font-size:12px">Videos per ad set
-          <input id="lmPer" type="number" min="1" step="1" value="${eng.DEFAULTS.videos_per_adset}" style="width:100%;padding:6px 8px;margin-top:3px"></label>
-        <label class="ph-sub" style="font-size:12px">Run days (blank = every day)
-          <input id="lmDays" placeholder="MON,TUE,WED…" style="width:100%;padding:6px 8px;margin-top:3px"></label>
-        <label class="ph-sub" style="font-size:12px">Targeting JSON (blank = store/account default)
-          <textarea id="lmTgt" rows="2" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace;font-size:11.5px"></textarea></label>
-        <div class="ph-sub" id="lmBmRow" style="font-size:12px">Business Manager: —</div>
-        <label class="ph-sub" style="font-size:12px">Ad account (from store config — edits are validated server-side)
-          <input id="lmAcct" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace">
-          <span id="lmAcctName" style="font-size:11.5px;display:block;margin-top:2px"></span></label>
-        <label class="ph-sub" style="font-size:12px">Page (from store config — edits are validated server-side)
-          <input id="lmPage" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace">
-          <span id="lmPageName" style="font-size:11.5px;display:block;margin-top:2px"></span></label>
+      <div id="lmForm" style="display:flex;flex-direction:column;gap:14px">
+        <!-- ── Store & tasks ── -->
+        <fieldset style="border:1px solid rgba(127,127,127,.2);border-radius:8px;padding:10px 12px;margin:0">
+          <legend class="ph-sub" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;padding:0 6px">Store &amp; tasks</legend>
+          <label class="ph-sub" style="font-size:12px">Store config
+            <select id="lmStore" style="width:100%;padding:6px 8px;margin-top:3px">${cfgs.map(c=>`<option value="${_esc(c.store_slug)}"${c.store_slug===guess.store_slug?' selected':''}>${_esc(c.store_name||c.store_slug)}</option>`).join('')}</select></label>
+          <div class="ph-sub" id="lmBmRow" style="font-size:12px;margin-top:7px">Business Manager: —</div>
+          <div class="ph-sub" style="font-size:11.5px;margin-top:5px">${selected.length} video${selected.length===1?'':'s'} selected</div>
+        </fieldset>
+
+        <!-- ── Budget ── -->
+        <fieldset style="border:1px solid rgba(127,127,127,.2);border-radius:8px;padding:10px 12px;margin:0">
+          <legend class="ph-sub" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;padding:0 6px">Budget</legend>
+          <div class="ph-sub" style="font-size:12px">Budget mode
+            <label style="margin-left:8px"><input type="radio" name="lmMode" value="CBO" checked> CBO</label>
+            <label style="margin-left:10px"><input type="radio" name="lmMode" value="ABO"> ABO</label></div>
+          <label class="ph-sub" style="font-size:12px;display:block;margin-top:7px"><span id="lmBudLbl">Daily budget (campaign) $</span>
+            <input id="lmBudget" type="number" min="0" step="1" value="0" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+          <div id="lmTrueTotal" style="font-size:12.5px;font-weight:600;margin-top:6px"></div>
+          <label class="ph-sub" style="font-size:12px;display:block;margin-top:7px">Campaign spend cap $ (0 = none)
+            <input id="lmCap" type="number" min="0" step="1" value="0" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+          <label class="ph-sub" style="font-size:12px;display:block;margin-top:7px">Videos per ad set
+            <input id="lmPer" type="number" min="1" step="1" value="${eng.DEFAULTS.videos_per_adset}" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+        </fieldset>
+
+        <!-- ── Advanced (objective defaults to OUTCOME_SALES; hidden unless opened) ── -->
+        <details style="border:1px solid rgba(127,127,127,.2);border-radius:8px;padding:0 12px">
+          <summary class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;cursor:pointer;padding:9px 0">Advanced</summary>
+          <div style="padding-bottom:10px;display:flex;flex-direction:column;gap:8px">
+            <label class="ph-sub" style="font-size:12px">Campaign objective <span style="opacity:.6">(default OUTCOME_SALES)</span>
+              <select id="lmObj" style="width:100%;padding:6px 8px;margin-top:3px">${eng.OBJECTIVES.map(o=>`<option>${o}</option>`).join('')}</select></label>
+            <label class="ph-sub" style="font-size:12px">Run days (blank = every day)
+              <input id="lmDays" placeholder="MON,TUE,WED…" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+            <label class="ph-sub" style="font-size:12px">Targeting JSON (blank = store/account default)
+              <textarea id="lmTgt" rows="2" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace;font-size:11.5px"></textarea></label>
+            <label class="ph-sub" style="font-size:12px">Ad account (from store config — edits are validated server-side)
+              <input id="lmAcct" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace">
+              <span id="lmAcctName" style="font-size:11.5px;display:block;margin-top:2px"></span></label>
+            <label class="ph-sub" style="font-size:12px">Page (from store config — edits are validated server-side)
+              <input id="lmPage" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace">
+              <span id="lmPageName" style="font-size:11.5px;display:block;margin-top:2px"></span></label>
+          </div>
+        </details>
+
         <button id="lmGo" class="rev-btn" style="justify-content:center;font-weight:600"><i data-lucide="rocket"></i>Publish (builds PAUSED)</button>
         <div id="lmMsg" class="ph-sub" style="font-size:12.5px"></div>
       </div>
