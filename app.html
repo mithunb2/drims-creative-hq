@@ -1506,11 +1506,14 @@ function _injectMetaSetupCSS(){
   .ms-pgwarn{grid-column:1/-1;font-size:12px}.ms-ok{color:#15803d}`;
   document.head.appendChild(s);
 }
-async function _mountMetaSetup(wrap,slug){
+async function _mountMetaSetup(wrap,slug,storeName){
   _injectMetaSetupCSS(); wrap.innerHTML='<div class="ms-card" style="padding:12px 14px;color:var(--mut)">Loading Meta Setup…</div>';
   let data={config:null,token_set:false};
   try{ const r=await fetch('/api/store-meta?slug='+encodeURIComponent(slug)); if(r.ok) data=await r.json(); }catch(e){}
   const c=data.config||{};
+  // Persisted store_name is what the launcher's assert_store_match compares against the ClickUp
+  // folder — so always save it (fall back to the passed display name for a brand-new config).
+  const displayName=(c.store_name||storeName||slug);
   const F=[['business_manager_id','Business Manager ID'],['ad_account_id','Ad Account ID (act_…)'],['page_id','Page ID (BM-owned)'],['pixel_id','Pixel ID'],['custom_conversion_id','Custom Conversion ID'],['ig_actor_id','Instagram Actor ID'],['default_landing','Default Landing URL'],['currency','Currency']];
   wrap.innerHTML='';
   const card=el(`<details class="ms-card"><summary><i data-lucide="settings-2"></i> Meta Setup — <b>${_esc(slug)}</b><span class="ms-tok ${data.token_set?'ok':'no'}">${data.token_set?'token set ✓':'no token'}</span></summary></details>`);
@@ -1523,7 +1526,7 @@ async function _mountMetaSetup(wrap,slug){
   const cfgAct=el('<div class="ms-actions"></div>');
   const saveCfg=el('<button class="ms-btn">Save config</button>'),cfgSt=el('<span class="ms-status"></span>');
   saveCfg.addEventListener('click',async()=>{
-    const payload={slug}; form.querySelectorAll('input[data-k]').forEach(i=>payload[i.dataset.k]=i.value.trim());
+    const payload={slug,store_name:displayName}; form.querySelectorAll('input[data-k]').forEach(i=>payload[i.dataset.k]=i.value.trim());
     cfgSt.textContent='Saving…';
     try{ const r=await fetch('/api/store-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const d=await r.json().catch(()=>({})); cfgSt.textContent=r.ok?'Saved ✓':(d.error||'Error'); }catch(e){cfgSt.textContent='Network error';}
   });
@@ -1907,7 +1910,8 @@ function renderDeepDive(){
   charts.length=0;
   const ads=adsForStore(selectedStore),body=$('#ddBody');body.innerHTML='';
   $('#ddTotal').textContent=`${ads.length} creatives`;
-  const _ms=el('<div id="metaSetup"></div>');body.appendChild(_ms);_mountMetaSetup(_ms,selectedStore);
+  const _ddStore=DATA.products.find(p=>p.id===selectedStore)||{};
+  const _ms=el('<div id="metaSetup"></div>');body.appendChild(_ms);_mountMetaSetup(_ms,selectedStore,storeName(_ddStore));
   if(!ads.length){body.appendChild(emptyState('inbox','No creatives in this store yet','As tasks land in this store\'s ClickUp lists, they appear after the next 10-min sync.'));icons();return;}
   const c=s=>ads.filter(a=>stageOf(a)===s).length,wins=ads.filter(isWinner),losers=ads.filter(isLoser);
   body.appendChild(el(`<div class="kpis">
@@ -2534,6 +2538,7 @@ async function viewCUTasks(){
     +'<input type="checkbox" id="cuListOnly"'+(_cuListOnly?' checked':'')+'> Production <b>list</b> only</label>'
     +'<span class="ph-sub" style="font-size:11.5px" id="cuCount"></span></div>');
   v.appendChild(bar);
+  v.appendChild(el('<div id="cuMeta" style="margin-bottom:14px"></div>'));   // per-store Meta Setup (all 22 folders)
   v.appendChild(el('<div id="cuBody"></div>'));
 
   const d=await _cuApi('action=stores');
@@ -2545,10 +2550,24 @@ async function viewCUTasks(){
   const sel=$('#cuStoreSel');
   sel.innerHTML='<option value="">Select a store… ('+_cuStores.length+' found)</option>'
     +_cuStores.map(s=>`<option value="${_esc(s.id)}"${s.id===_cuStore?' selected':''}>${_esc(s.name)}</option>`).join('');
-  sel.addEventListener('change',async e=>{_cuStore=e.target.value;await _cuRender();});
+  sel.addEventListener('change',async e=>{_cuStore=e.target.value;await _cuMountMeta();await _cuRender();});
   $('#cuListOnly').addEventListener('change',async e=>{_cuListOnly=e.target.checked;await _cuRender();});
+  await _cuMountMeta();
   await _cuRender();
   icons();
+}
+
+// Derive a stable config slug from the ClickUp folder name (matches the products-table convention:
+// lowercase, non-alphanumerics -> underscore). Editing/creating a config keyed this way guarantees
+// the launcher's assert_store_match succeeds (store_name is also saved = the folder name).
+const _folderSlug=n=>String(n||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+async function _cuMountMeta(){
+  const box=$('#cuMeta'); if(!box)return;
+  const folder=(_cuStores||[]).find(s=>s.id===_cuStore);
+  if(!folder){box.innerHTML='<div class="ph-sub" style="font-size:12px;padding:2px 2px">Select a store to view or create its Meta Setup (BM · account · page · pixel · token).</div>';return;}
+  // Key by the FOLDER — so every one of the discovered stores is configurable here, and the saved
+  // config (slug=folder-slug, store_name=folder name) always matches this store at launch time.
+  await _mountMetaSetup(box,_folderSlug(folder.name),folder.name);
 }
 
 async function _cuRender(){
