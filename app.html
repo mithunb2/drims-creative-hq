@@ -2681,7 +2681,11 @@ async function _cuLaunchModal(){
   if(!cfgs.length){alert('No store Meta configs exist yet — set one up in Meta Setup first.');return;}
   const folder=(_cuStores||[]).find(s=>s.id===_cuStore);
   const nrm=s=>String(s||'').trim().toLowerCase().replace(/[\s_]+/g,' ');
-  const guess=cfgs.find(c=>nrm(c.store_name)===nrm(folder&&folder.name)||nrm(c.store_slug)===nrm(folder&&folder.name))||cfgs[0];
+  const folderName=(folder&&folder.name)||'';
+  // EXACT match only — no cfgs[0] fallback. "Soap Craft Academy" and "Cake Craft Academy" share
+  // "Craft Academy" but are different stores, and there may be no config at all. Prefer NO selection
+  // over a wrong one; the server (assert_store_match) rejects a mismatch regardless.
+  const match=cfgs.find(c=>nrm(c.store_name)===nrm(folderName)||nrm(c.store_slug)===nrm(folderName))||null;
 
   const ov=document.createElement('div');
   ov.id='cuLM';
@@ -2696,9 +2700,12 @@ async function _cuLaunchModal(){
         <fieldset style="border:1px solid rgba(127,127,127,.2);border-radius:8px;padding:10px 12px;margin:0">
           <legend class="ph-sub" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;padding:0 6px">Store &amp; tasks</legend>
           <label class="ph-sub" style="font-size:12px">Store config
-            <select id="lmStore" style="width:100%;padding:6px 8px;margin-top:3px">${cfgs.map(c=>`<option value="${_esc(c.store_slug)}"${c.store_slug===guess.store_slug?' selected':''}>${_esc(c.store_name||c.store_slug)}</option>`).join('')}</select></label>
+            <select id="lmStore" style="width:100%;padding:6px 8px;margin-top:3px">
+              <option value=""${match?'':' selected'}>${match?'— select store config —':'⚠ no config matches this store'}</option>
+              ${cfgs.map(c=>`<option value="${_esc(c.store_slug)}"${match&&c.store_slug===match.store_slug?' selected':''}>${_esc(c.store_name||c.store_slug)}</option>`).join('')}</select></label>
+          ${match?'':`<div class="ms-warn" style="font-size:11.5px;margin-top:5px">No Meta config matches <b>${_esc(folderName)}</b>. Set one up in Meta Setup, or pick the right store explicitly — the server rejects launching one store's videos on another's account.</div>`}
           <div class="ph-sub" id="lmBmRow" style="font-size:12px;margin-top:7px">Business Manager: —</div>
-          <div class="ph-sub" style="font-size:11.5px;margin-top:5px">${selected.length} video${selected.length===1?'':'s'} selected</div>
+          <div class="ph-sub" style="font-size:11.5px;margin-top:5px">${selected.length} video${selected.length===1?'':'s'} selected from <b>${_esc(folderName||'—')}</b></div>
         </fieldset>
 
         <!-- ── Budget ── -->
