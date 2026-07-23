@@ -31,6 +31,7 @@ import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolveOptions, buildPlan, applyEdits, totalDailySpend, planSummary, LaunchOptionError } from '../lib/launch/options.js';
 import { extractAdCopy, holdsQuery, holdsByTaskId } from '../lib/launch/ad_copy.js';
+import { norm } from '../lib/launch/registry.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
@@ -93,9 +94,43 @@ async function fetchTasksById(taskIds) {
       task_id: t.id, id: t.id, name: t.name || '',
       drive_link: cf && cf.value ? String(cf.value) : null,
       headline: copy.headline, primary_text: copy.primary_text,
+      // The task's OWN store, straight from ClickUp — the authoritative store of record, used to
+      // reject a selected config that belongs to a different store (see assertStoreMatch).
+      folder_id: t.folder && t.folder.id ? String(t.folder.id) : null,
+      folder_name: (t.folder && t.folder.name) || '',
     });
   }));
   return out;
+}
+
+/**
+ * assert_store_match — the tasks' OWN store (their ClickUp folder) MUST be the selected config's
+ * store. assert_account only proves the plan targets the selected config's account; it can't catch
+ * a selected config that belongs to a DIFFERENT store than the tasks (one store's videos launched
+ * with another store's config). Fail-closed: reject if the tasks span more than one folder, or the
+ * tasks' folder doesn't correspond to the selected store.
+ *
+ * Store-agnostic: no store name/id is hardcoded — the tasks' folder name comes from ClickUp, and
+ * the match is against the SELECTED config's own store_name / store_slug, via the shared norm().
+ * Returns null on match, or an error payload (with both store names) on mismatch.
+ */
+function assertStoreMatch(selected, cfg) {
+  const folders = new Map();
+  for (const t of selected) if (t.folder_id) folders.set(t.folder_id, t.folder_name || '');
+  if (folders.size === 0) {
+    return { status: 'store_undetermined', reason: 'could not determine the tasks\' store from ClickUp — refusing' };
+  }
+  if (folders.size > 1) {
+    return { status: 'tasks_span_multiple_stores',
+      reason: `selected tasks span ${folders.size} different stores (${[...folders.values()].join(', ')}) — launch one store at a time` };
+  }
+  const folderName = [...folders.values()][0];
+  const target = new Set([norm(cfg.store_name), norm(cfg.store_slug)].filter(Boolean));
+  if (!target.has(norm(folderName))) {
+    return { status: 'store_task_mismatch',
+      reason: `these tasks belong to store '${folderName}', but the selected Meta config is '${cfg.store_name || cfg.store_slug}' — refusing to launch one store's videos on another store's account` };
+  }
+  return null;
 }
 
 // The store's ALLOWED launch identities: its own config + its explicit override-registry entry.
@@ -138,6 +173,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, reason: 'selected task(s) have no Drive link on ClickUp', task_ids: missing });
     }
     const selected = taskIds.map((id) => fetched.get(id));   // preserves operator selection order
+
+    // ── STORE/TASK MATCH (fail-closed): the tasks' own store (ClickUp folder) must be the selected
+    // config's store. Catches one store's videos launched with another's config, which
+    // assert_account can't. ──
+    const mism = assertStoreMatch(selected, cfg);
+    if (mism) return res.status(400).json({ ok: false, ...mism });
 
     // Rebuild the plan server-side through the SAME engine the review UI used.
     let plan;

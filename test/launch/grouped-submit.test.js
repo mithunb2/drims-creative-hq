@@ -85,6 +85,8 @@ function mockFetch(over = {}) {
       if (!t) return j({}, 404);
       return j({ id, name: t.name,
         description: t.description ?? 'HEADLINE: Fixture headline\nPRIMARY COPY:\nFixture primary body.',
+        // folder = the task's OWN store; default matches CFG.store_name so match passes.
+        folder: t.folder ?? { id: 'fld_fixture', name: over.folderName ?? 'Fixture Store' },
         custom_fields: t.drive_link ? [{ name: 'Drive Link', value: t.drive_link }] : [] });
     }
     if (u.includes('graph.facebook.com')) return j(over.asl ?? { spend_cap: '2000', amount_spent: '0', currency: 'USD' }, over.aslStatus ?? 200);
@@ -269,4 +271,43 @@ test('names: name -> "Name (id)"; failed read -> id ALONE, never blank', () => {
   assert.equal(displayIdName('act_1', 'Lolis'), 'Lolis (act_1)');
   assert.equal(displayIdName('act_1', null), 'act_1');
   assert.equal(displayIdName(null, null), '—');
+});
+
+// ── item 1: STORE/TASK MATCH — the live cross-store bug ─────────────────────
+test('endpoint: tasks from a DIFFERENT store than the selected config -> 400 store_task_mismatch', async () => {
+  // config store = "Fixture Store"; tasks' folder = "Soap Craft Academy" -> mismatch, names both.
+  const restore = mockFetch({ folderName: 'Soap Craft Academy' });
+  try { await withEnv(async () => {
+    const res = mockRes();
+    await handler(REQ(BODY), res);
+    assert.equal(res._status, 400);
+    assert.equal(res._json.status, 'store_task_mismatch');
+    assert.match(res._json.reason, /Soap Craft Academy/);
+    assert.match(res._json.reason, /Fixture Store/);
+  }); } finally { restore(); }
+});
+
+test('endpoint: tasks spanning two folders -> 400 tasks_span_multiple_stores', async () => {
+  const tasks = Object.fromEntries(mkTasks(6).map((x) => [x.task_id, x]));
+  tasks.t1 = { ...tasks.t1, folder: { id: 'fA', name: 'Store A' } };
+  tasks.t2 = { ...tasks.t2, folder: { id: 'fB', name: 'Store B' } };
+  tasks.t3 = { ...tasks.t3, folder: { id: 'fA', name: 'Store A' } };
+  const restore = mockFetch({ cuTasks: tasks });
+  try { await withEnv(async () => {
+    const res = mockRes();
+    await handler(REQ(BODY), res);
+    assert.equal(res._status, 400);
+    assert.equal(res._json.status, 'tasks_span_multiple_stores');
+  }); } finally { restore(); }
+});
+
+test('endpoint: tasks whose folder MATCHES the config store pass the store gate (proceed to flag gate)', async () => {
+  // folder "Fixture Store" == CFG.store_name -> match; reaches the flag gate (OFF) not a store 400.
+  const restore = mockFetch({ folderName: 'Fixture Store' });
+  try { await withEnv(async () => {
+    const res = mockRes();
+    await handler(REQ(BODY), res);
+    assert.equal(res._status, 403);
+    assert.equal(res._json.status, 'blocked_by_security_gate');
+  }); } finally { restore(); }
 });
