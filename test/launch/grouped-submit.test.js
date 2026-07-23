@@ -77,12 +77,15 @@ function mockFetch(over = {}) {
     if (u.includes('/auth/v1/user')) return j(over.user ?? { id: 'u1', email: 'op@example.com' }, over.userStatus ?? 200);
     if (u.includes('store_meta_config')) return j(over.cfg ?? [CFG]);
     if (u.includes('store_meta_secrets')) return j(over.sec ?? [{ system_user_token: 'tok', app_secret: 'sec' }]);
+    if (u.includes('launch_holds')) return j(over.holds ?? []);
     if (u.includes('launch_jobs')) return j(over.insert ?? [{ id: 'job-1' }], 201);
     if (u.includes('api.clickup.com')) {
       const id = u.match(/task\/([^/?]+)/)[1];
       const t = (over.cuTasks ?? Object.fromEntries(mkTasks(6).map((x) => [x.task_id, x])))[id];
       if (!t) return j({}, 404);
-      return j({ id, name: t.name, custom_fields: t.drive_link ? [{ name: 'Drive Link', value: t.drive_link }] : [] });
+      return j({ id, name: t.name,
+        description: t.description ?? 'HEADLINE: Fixture headline\nPRIMARY COPY:\nFixture primary body.',
+        custom_fields: t.drive_link ? [{ name: 'Drive Link', value: t.drive_link }] : [] });
     }
     if (u.includes('graph.facebook.com')) return j(over.asl ?? { spend_cap: '2000', amount_spent: '0', currency: 'USD' }, over.aslStatus ?? 200);
     throw new Error('unmocked fetch: ' + u.slice(0, 80));
@@ -194,4 +197,76 @@ test('endpoint: flag ON -> 202 grouped_build_queued, PAUSED, requested_grouped (
     assert.equal(inserted.overrides.build.plan.status, 'PAUSED');
     assert.equal(inserted.account_id, CFG.ad_account_id);                     // isolation held through to the row
   }); } finally { global.fetch = origFetch; restore(); }
+});
+
+// ── ad copy extraction + server-side missing-copy refusal (A) ───────────────
+import { parseAdCopy, extractAdCopy, holdsByTaskId } from '../../lib/launch/ad_copy.js';
+
+test('ad copy: strategist description format (HEADLINE:/PRIMARY COPY:)', () => {
+  const d = 'brief stuff\nHEADLINE: FREE Today. $79 Tomorrow.\nPRIMARY COPY:\nLine one.\nLine two.\n\nVISUAL NOTES: ignore this';
+  const c = parseAdCopy(d);
+  assert.equal(c.headline, 'FREE Today. $79 Tomorrow.');
+  assert.equal(c.primary_text, 'Line one.\nLine two.');   // stops at the next LABEL: section
+});
+
+test('ad copy: doc-pipeline hold format (Headline:/Primary text:) wins over description', () => {
+  const c = extractAdCopy({
+    holdAdCopy: 'Headline: Household essentials\nPrimary text: Stop overpaying for essentials.',
+    description: 'HEADLINE: other\nPRIMARY COPY:\nother body',
+  });
+  assert.equal(c.headline, 'Household essentials');
+  assert.equal(c.primary_text, 'Stop overpaying for essentials.');
+});
+
+test('ad copy: unlabeled hold copy = all primary; nothing anywhere = nulls', () => {
+  assert.equal(extractAdCopy({ holdAdCopy: 'Just prose copy.', description: '' }).primary_text, 'Just prose copy.');
+  const none = extractAdCopy({ holdAdCopy: null, description: 'no labels here' });
+  assert.equal(none.headline, null); assert.equal(none.primary_text, null);
+});
+
+test('ad copy: holdsByTaskId maps BOTH linkage columns', () => {
+  const m = holdsByTaskId([{ production_task_id: 'p1', clickup_task_id: 'c1', launch_half: { ad_copy: 'X' } }]);
+  assert.equal(m.get('p1'), 'X'); assert.equal(m.get('c1'), 'X');
+});
+
+test('endpoint: task with NO copy anywhere -> 400 missing_ad_copy (SERVER-enforced, crafted request cannot bypass)', async () => {
+  const tasks = Object.fromEntries(mkTasks(6).map((x) => [x.task_id, { ...x, description: 'brief with no copy labels' }]));
+  const restore = mockFetch({ cuTasks: tasks });
+  try { await withEnv(async () => {
+    const res = mockRes();
+    // Crafted request claims nothing about copy — server re-extracts and refuses.
+    await handler(REQ(BODY), res);
+    assert.equal(res._status, 400);
+    assert.equal(res._json.status, 'missing_ad_copy');
+    assert.deepEqual([...res._json.task_ids].sort(), ['t1', 't2', 't3']);
+  }); } finally { restore(); }
+});
+
+test('endpoint: operator-typed copy via edits clears the refusal (legitimate path)', async () => {
+  const tasks = Object.fromEntries(mkTasks(6).map((x) => [x.task_id, { ...x, description: 'no copy labels' }]));
+  const restore = mockFetch({ cuTasks: tasks });
+  try { await withEnv(async () => {
+    const res = mockRes();
+    await handler(REQ({ ...BODY, edits: { ads: {
+      '0,0': { primary_text: 'typed copy 1' }, '0,1': { primary_text: 'typed copy 2' }, '1,0': { primary_text: 'typed copy 3' },
+    } } }), res);
+    // copy satisfied -> proceeds to the flag gate (OFF in withEnv) = 403 gate, NOT 400 missing copy
+    assert.equal(res._status, 403);
+    assert.equal(res._json.status, 'blocked_by_security_gate');
+  }); } finally { restore(); }
+});
+
+test('ad names: suggest prefers the task NAME over the id (D)', async () => {
+  const { suggestAdName } = await import('../../lib/launch/options.js');
+  assert.equal(suggestAdName({ task_id: '86ajh3q0y', name: 'SCA-0081' }), 'SCA-0081');
+  assert.equal(suggestAdName({ task_id: '86ajh3q0y' }), '86ajh3q0y');   // no name -> id, never blank
+});
+
+// ── meta names fail-soft display contract (B) ───────────────────────────────
+import { displayIdName } from '../../lib/launch/meta_names.js';
+
+test('names: name -> "Name (id)"; failed read -> id ALONE, never blank', () => {
+  assert.equal(displayIdName('act_1', 'Lolis'), 'Lolis (act_1)');
+  assert.equal(displayIdName('act_1', null), 'act_1');
+  assert.equal(displayIdName(null, null), '—');
 });

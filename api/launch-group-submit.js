@@ -30,6 +30,7 @@
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolveOptions, buildPlan, applyEdits, totalDailySpend, planSummary, LaunchOptionError } from '../lib/launch/options.js';
+import { extractAdCopy, holdsQuery, holdsByTaskId } from '../lib/launch/ad_copy.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
@@ -69,9 +70,17 @@ async function svc(path, init) {
   return t ? JSON.parse(t) : null;
 }
 
-// Server-side re-fetch of the selected tasks — Drive links come from ClickUp, not the client.
+// Server-side re-fetch of the selected tasks — Drive links AND ad copy come from ClickUp +
+// launch_holds, not the client. (An operator can still EDIT copy via `edits`, which is
+// legitimate typed-in copy; what they cannot do is silently launch with none — see the
+// missing-copy refusal after applyEdits below.)
 async function fetchTasksById(taskIds) {
   const out = new Map();
+  let holds = new Map();
+  try {
+    const rows = await svc(holdsQuery(taskIds));
+    holds = holdsByTaskId(rows);
+  } catch { /* holds unreachable -> description extraction still applies */ }
   await Promise.all(taskIds.map(async (id) => {
     const r = await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(id)}`, {
       headers: { Authorization: CLICKUP_TOKEN(), Accept: 'application/json' },
@@ -79,9 +88,11 @@ async function fetchTasksById(taskIds) {
     if (!r.ok) throw new Error(`ClickUp ${r.status} on task ${id}`);
     const t = await r.json();
     const cf = (t.custom_fields || []).find((c) => (c.name || '').trim().toLowerCase() === 'drive link');
+    const copy = extractAdCopy({ holdAdCopy: holds.get(String(id)) || null, description: t.description || '' });
     out.set(String(id), {
       task_id: t.id, id: t.id, name: t.name || '',
       drive_link: cf && cf.value ? String(cf.value) : null,
+      headline: copy.headline, primary_text: copy.primary_text,
     });
   }));
   return out;
@@ -153,6 +164,19 @@ export default async function handler(req, res) {
     // ── PAUSED invariant (structural; the engine emits nothing else). ──
     if (plan.status !== 'PAUSED' || plan.do_activate) {
       return res.status(400).json({ ok: false, reason: 'plan must be PAUSED with do_activate=false' });
+    }
+
+    // ── AD COPY (server-enforced): no ad launches without primary text. Checked on the FINAL
+    // plan (after applyEdits), so extraction from ClickUp/launch_holds AND operator-typed copy
+    // both count — but a crafted request with neither is refused regardless of what the client
+    // claimed. Headline is optional (the build worker defaults it); primary text is not.
+    const noCopy = [];
+    for (const a of plan.adsets) for (const ad of a.ads) {
+      if (!ad.primary_text || !String(ad.primary_text).trim()) noCopy.push(ad.task_id);
+    }
+    if (noCopy.length) {
+      return res.status(400).json({ ok: false, status: 'missing_ad_copy', task_ids: noCopy,
+        reason: `no ad copy (primary text) found for task(s) ${noCopy.join(', ')} — none on the task/holds, and none supplied in edits. Write copy in the review screen or on the task first.` });
     }
 
     // ── ASL gate on the COMPUTED total (ABO = budget × ad-set count). ──

@@ -44,6 +44,18 @@ export default async function handler(req, res) {
       for (const f of FIELDS) if (body[f] !== undefined) row[f] = body[f] === '' ? null : body[f];
       await svc(`store_meta_config?on_conflict=store_slug`,
         { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(row) });
+
+      // Refresh cached BM/account/page names on save — ids may have changed and stale names lie.
+      // Best-effort: no token yet (mid-onboarding) or a failed read just leaves names for the
+      // Test-connection refresh; a failed read never blanks the id display.
+      try {
+        const { resolveMetaNames, cacheMetaNames } = await import('../lib/launch/meta_names.js');
+        const sec = (await svc(`store_meta_secrets?store_slug=eq.${encodeURIComponent(slug)}&select=system_user_token,app_secret`) || [])[0];
+        if (sec && sec.system_user_token && sec.app_secret) {
+          const cfg = (await svc(`store_meta_config?store_slug=eq.${encodeURIComponent(slug)}&select=*`) || [])[0];
+          if (cfg) await cacheMetaNames(SUPABASE_URL, SERVICE, slug, await resolveMetaNames(cfg, sec.system_user_token, sec.app_secret));
+        }
+      } catch { /* name refresh is never allowed to fail a save */ }
       return res.status(200).json({ status: 'saved', slug });
     }
     return res.status(405).json({ error: 'GET or POST' });

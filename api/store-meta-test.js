@@ -5,6 +5,7 @@
 // Vercel env), and is NEVER returned to the browser. Checks: token valid? account reachable? ASL set?
 // page usable (CREATE_CONTENT+ADVERTISE) + BM-owned?
 import crypto from 'node:crypto';
+import { resolveMetaNames, cacheMetaNames } from '../lib/launch/meta_names.js';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const G = 'https://graph.facebook.com/v21.0';
@@ -82,7 +83,13 @@ export default async function handler(req, res) {
         not_visible_in_bm: 'not listed in this BM (owned or client) — check the share', unknown: 'no BM id configured' }[ownership] };
 
     out.ready = ['token_valid', 'account', 'asl', 'page_tasks'].every((k) => out[k].ok);
-    return res.status(200).json({ slug, checks: out });   // NB: token never included in the response
+
+    // Refresh the cached BM/account/page NAMES as part of every test (fail-soft: a failed read
+    // leaves that name null and the UI shows the id alone; cache write tolerates missing columns).
+    const names = await resolveMetaNames(cfg, token, secret);
+    await cacheMetaNames(SUPABASE_URL, SERVICE, slug, names);
+
+    return res.status(200).json({ slug, checks: out, names });   // NB: token never included in the response
   } catch (err) {
     console.error('[api/store-meta-test] error:', err);
     return res.status(500).json({ error: 'test failed', detail: String((err && err.message) || err) });

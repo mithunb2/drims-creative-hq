@@ -2710,10 +2710,13 @@ async function _cuLaunchModal(){
           <input id="lmDays" placeholder="MON,TUE,WED…" style="width:100%;padding:6px 8px;margin-top:3px"></label>
         <label class="ph-sub" style="font-size:12px">Targeting JSON (blank = store/account default)
           <textarea id="lmTgt" rows="2" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace;font-size:11.5px"></textarea></label>
+        <div class="ph-sub" id="lmBmRow" style="font-size:12px">Business Manager: —</div>
         <label class="ph-sub" style="font-size:12px">Ad account (from store config — edits are validated server-side)
-          <input id="lmAcct" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace"></label>
+          <input id="lmAcct" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace">
+          <span id="lmAcctName" style="font-size:11.5px;display:block;margin-top:2px"></span></label>
         <label class="ph-sub" style="font-size:12px">Page (from store config — edits are validated server-side)
-          <input id="lmPage" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace"></label>
+          <input id="lmPage" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace">
+          <span id="lmPageName" style="font-size:11.5px;display:block;margin-top:2px"></span></label>
         <button id="lmGo" class="rev-btn" style="justify-content:center;font-weight:600"><i data-lucide="rocket"></i>Publish (builds PAUSED)</button>
         <div id="lmMsg" class="ph-sub" style="font-size:12.5px"></div>
       </div>
@@ -2725,10 +2728,33 @@ async function _cuLaunchModal(){
   $m('#lmClose').addEventListener('click',()=>ov.remove());
   ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
 
-  const nameEdits={campaign:null,adsets:{},ads:{}};   // operator renames, applied via applyEdits
+  // Operator edits, applied via applyEdits. Ad-level edits (name/headline/primary_text) are keyed
+  // by TASK ID — not by (adset,ad) index — so they survive videos_per_adset regrouping.
+  const nameEdits={campaign:null,adsets:{}};
+  const adEdits=new Map();   // task_id -> {name?, headline?, primary_text?}
+  const setAdEdit=(tid,k,v)=>{const e=adEdits.get(tid)||{};e[k]=v;adEdits.set(tid,e);};
   const storeCfg=()=>cfgs.find(c=>c.store_slug===$m('#lmStore').value)||{};
   const fillIdentity=()=>{const c=storeCfg();$m('#lmAcct').value=c.ad_account_id||'';$m('#lmPage').value=c.page_id||'';};
   fillIdentity();
+
+  // BM / account / page NAMES — resolved server-side (store token, cached in store_meta_config).
+  // Fail-soft contract: no name -> show the id ALONE, never a blank.
+  const _names={};   // slug -> {bm:{id,name},account:{...},page:{...}}
+  const idName=o=>!o||!o.id?'—':(o.name?`${_esc(o.name)} <code>${_esc(o.id)}</code>`:`<code>${_esc(o.id)}</code>`);
+  async function loadNames(){
+    const slug=$m('#lmStore').value;
+    if(!_names[slug]){
+      try{const jwt=await _accessToken();
+        const r=await fetch('/api/store-meta-names?slug='+encodeURIComponent(slug),{headers:{Authorization:'Bearer '+jwt}});
+        const j=await r.json(); if(j.ok)_names[slug]=j;
+      }catch(e){}
+      _names[slug]=_names[slug]||null;
+    }
+    const n=_names[slug],c=storeCfg();
+    $m('#lmBmRow').innerHTML='Business Manager: '+(n?idName(n.bm):(c.business_manager_id?`<code>${_esc(c.business_manager_id)}</code>`:'—'));
+    $m('#lmAcctName').innerHTML=n&&n.account&&n.account.name&&n.account.id===$m('#lmAcct').value.trim()?_esc(n.account.name):'';
+    $m('#lmPageName').innerHTML=n&&n.page&&n.page.name&&n.page.id===$m('#lmPage').value.trim()?_esc(n.page.name):'';
+  }
 
   const readOpts=()=>({
     videos_per_adset:Math.max(1,parseInt($m('#lmPer').value,10)||1),
@@ -2741,11 +2767,18 @@ async function _cuLaunchModal(){
     account_id:$m('#lmAcct').value.trim()||null,
     page_id:$m('#lmPage').value.trim()||null,
   });
-  const readEdits=()=>{
+  // Task-keyed ad edits -> index-keyed applyEdits payload, derived from the CURRENT grouping.
+  const readEdits=(basePlan)=>{
     const e={};
     if(nameEdits.campaign)e.campaign={name:nameEdits.campaign};
     if(Object.keys(nameEdits.adsets).length)e.adsets=Object.fromEntries(Object.entries(nameEdits.adsets).map(([i,n])=>[i,{name:n}]));
-    if(Object.keys(nameEdits.ads).length)e.ads=Object.fromEntries(Object.entries(nameEdits.ads).map(([k,n])=>[k,{name:n}]));
+    if(adEdits.size&&basePlan){
+      const ads={};
+      basePlan.adsets.forEach((a,si)=>a.ads.forEach((ad,ai)=>{
+        const p=adEdits.get(ad.task_id); if(p&&Object.keys(p).length)ads[`${si},${ai}`]={...p};
+      }));
+      if(Object.keys(ads).length)e.ads=ads;
+    }
     return Object.keys(e).length?e:null;
   };
 
@@ -2754,8 +2787,10 @@ async function _cuLaunchModal(){
     let plan,err=null;
     try{
       const opts=eng.resolveOptions(readOpts(),c);
-      plan=eng.buildPlan(selected.map(t=>({task_id:t.id,name:t.name,drive_link:t.drive_link})),opts,c,{dateStr:new Date().toISOString().slice(0,10)});
-      const ed=readEdits(); if(ed)plan=eng.applyEdits(plan,ed);
+      // Task copy flows in from the feed (launch_holds -> description sections -> null).
+      const base=eng.buildPlan(selected.map(t=>({task_id:t.id,name:t.name,drive_link:t.drive_link,
+        headline:t.headline||null,primary_text:t.primary_text||null})),opts,c,{dateStr:new Date().toISOString().slice(0,10)});
+      const ed=readEdits(base); plan=ed?eng.applyEdits(base,ed):base;
     }catch(ex){err=ex.message;}
     const mode=ov.querySelector('input[name=lmMode]:checked').value;
     $m('#lmBudLbl').textContent=mode==='CBO'?'Daily budget (campaign) $':'Daily budget PER AD SET $';
@@ -2765,32 +2800,51 @@ async function _cuLaunchModal(){
     $m('#lmTrueTotal').innerHTML=mode==='ABO'
       ?`TRUE total: ${plan.adsets.length} ad set${plan.adsets.length===1?'':'s'} × $${(plan.adsets[0]&&plan.adsets[0].daily_budget_usd||0)} = <b>$${total.toFixed(2)}/day</b>`
       :`Total daily spend: <b>$${total.toFixed(2)}/day</b>`;
+    // No ad may launch without primary text — mirror of the SERVER-enforced refusal.
+    const noCopy=plan.adsets.flatMap(a=>a.ads.filter(ad=>!(ad.primary_text&&String(ad.primary_text).trim())));
+    const n=_names[$m('#lmStore').value];
+    const acctDisp=n&&n.account&&n.account.name&&n.account.id===plan.account_id?`${_esc(n.account.name)} <code>${_esc(plan.account_id)}</code>`:`<code>${_esc(plan.account_id)}</code>`;
+    const pageDisp=n&&n.page&&n.page.name&&n.page.id===plan.page_id?`${_esc(n.page.name)} <code>${_esc(plan.page_id)}</code>`:`<code>${_esc(plan.page_id)}</code>`;
     $m('#lmPrev').innerHTML=`
       <div style="border:1px solid rgba(127,127,127,.25);border-radius:8px;padding:10px 12px">
         <input data-ne="c" value="${_esc(plan.campaign.name)}" style="width:100%;font-weight:600;padding:4px 6px">
-        <div class="ph-sub" style="font-size:11.5px;margin-top:3px">${_esc(plan.campaign.objective)} · ${plan.campaign.budget_mode} · account <code>${_esc(plan.account_id)}</code> · page <code>${_esc(plan.page_id)}</code> · <b>PAUSED</b></div>
+        <div class="ph-sub" style="font-size:11.5px;margin-top:3px">${_esc(plan.campaign.objective)} · ${plan.campaign.budget_mode} · account ${acctDisp} · page ${pageDisp} · <b>PAUSED</b></div>
         ${plan.adsets.map((a,i)=>`<div style="margin:9px 0 0 12px;border-left:2px solid rgba(127,127,127,.3);padding-left:10px">
           <input data-ne="s${i}" value="${_esc(a.name)}" style="width:100%;padding:3px 6px;font-size:12.5px">
           <div class="ph-sub" style="font-size:11px">${a.daily_budget_usd!=null?('$'+a.daily_budget_usd+'/day · '):''}${a.ads.length} ad${a.ads.length===1?'':'s'}</div>
-          ${a.ads.map((ad,j)=>`<div style="margin:4px 0 0 12px;display:flex;gap:6px;align-items:center">
-            <i data-lucide="film" style="width:13px"></i>
-            <input data-ne="a${i},${j}" value="${_esc(ad.name)}" style="flex:1;padding:2px 6px;font-size:12px">
-          </div>`).join('')}
+          ${a.ads.map(ad=>{const miss=!(ad.primary_text&&String(ad.primary_text).trim());return `<div style="margin:6px 0 0 12px;padding:6px 8px;border:1px solid ${miss?'#c0392b':'rgba(127,127,127,.2)'};border-radius:6px">
+            <div style="display:flex;gap:6px;align-items:center">
+              <i data-lucide="film" style="width:13px"></i>
+              <input data-ne="an|${_esc(ad.task_id)}" value="${_esc(ad.name)}" title="ad name" style="flex:1;padding:2px 6px;font-size:12px">
+              ${miss?'<span style="color:#c0392b;font-size:10.5px;font-weight:700;white-space:nowrap">NO AD COPY</span>':''}
+            </div>
+            <input data-ne="ah|${_esc(ad.task_id)}" value="${_esc(ad.headline||'')}" placeholder="Headline (optional — worker defaults it)" style="width:100%;margin-top:4px;padding:2px 6px;font-size:11.5px">
+            <textarea data-ne="ap|${_esc(ad.task_id)}" rows="2" placeholder="Primary text — REQUIRED to publish" style="width:100%;margin-top:3px;padding:3px 6px;font-size:11.5px">${_esc(ad.primary_text||'')}</textarea>
+          </div>`;}).join('')}
         </div>`).join('')}
       </div>`;
     ov.querySelectorAll('[data-ne]').forEach(inp=>inp.addEventListener('change',e=>{
       const k=e.target.dataset.ne;
       if(k==='c')nameEdits.campaign=e.target.value;
-      else if(k[0]==='s')nameEdits.adsets[k.slice(1)]=e.target.value;
-      else if(k[0]==='a')nameEdits.ads[k.slice(1)]=e.target.value;
+      else if(k[0]==='s'&&k[1]!=='|')nameEdits.adsets[k.slice(1)]=e.target.value;
+      else if(k.startsWith('an|'))setAdEdit(k.slice(3),'name',e.target.value);
+      else if(k.startsWith('ah|'))setAdEdit(k.slice(3),'headline',e.target.value);
+      else if(k.startsWith('ap|'))setAdEdit(k.slice(3),'primary_text',e.target.value);
       recompute();}));
+    const go=$m('#lmGo');
+    go.disabled=noCopy.length>0;
+    go.title=noCopy.length?`${noCopy.length} ad(s) have no primary text — write copy in the red boxes first`:'';
+    if(noCopy.length)$m('#lmMsg').innerHTML=`<span class="ms-warn">${noCopy.length} ad(s) missing copy — Publish disabled (server refuses these too).</span>`;
+    else if(($m('#lmMsg').textContent||'').includes('missing copy'))$m('#lmMsg').innerHTML='';
     icons();
     return plan;
   }
   ['#lmObj','#lmBudget','#lmCap','#lmPer','#lmDays','#lmTgt','#lmAcct','#lmPage'].forEach(s=>$m(s).addEventListener('input',recompute));
   ov.querySelectorAll('input[name=lmMode]').forEach(r=>r.addEventListener('change',recompute));
-  $m('#lmStore').addEventListener('change',()=>{fillIdentity();recompute();});
+  $m('#lmStore').addEventListener('change',()=>{fillIdentity();recompute();loadNames().then(recompute);});
+  ['#lmAcct','#lmPage'].forEach(s=>$m(s).addEventListener('input',()=>loadNames()));
   recompute();
+  loadNames().then(recompute);
 
   $m('#lmGo').addEventListener('click',async()=>{
     const plan=recompute(); if(!plan)return;
@@ -2800,7 +2854,7 @@ async function _cuLaunchModal(){
       const r=await fetch('/api/launch-group-submit',{method:'POST',
         headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
         body:JSON.stringify({folder_id:_cuStore,store_slug:$m('#lmStore').value,
-          task_ids:selected.map(t=>t.id),options:readOpts(),edits:readEdits()})});
+          task_ids:selected.map(t=>t.id),options:readOpts(),edits:readEdits(plan)})});
       const j=await r.json();
       if(j.ok){$m('#lmMsg').innerHTML='<span class="ms-ok">✓ '+_esc(j.message||j.status)+'</span>';}
       else{$m('#lmMsg').innerHTML='<span class="ms-warn">'+_esc(j.reason||j.status||('HTTP '+r.status))+'</span>';$m('#lmGo').disabled=false;}

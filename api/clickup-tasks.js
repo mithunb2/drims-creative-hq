@@ -18,8 +18,11 @@
 // literals are ClickUp's own status vocabulary (below), which is workspace configuration, not a
 // store identity — override it with CLICKUP_PROD_STATUSES if the team renames its statuses.
 
+import { extractAdCopy, holdsQuery, holdsByTaskId } from '../lib/launch/ad_copy.js';
+
 const TOKEN = process.env.CLICKUP_LAUNCH_TOKEN || '';
 const API = 'https://api.clickup.com/api/v2';
+const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // ── AUTH GATE ───────────────────────────────────────────────────────────────
 // This endpoint reads the WHOLE ClickUp workspace with a privileged server token, so it must
@@ -176,6 +179,22 @@ async function loadTasks(folderId, mode) {
 
   const seen = new Map();
   for (const group of perList) for (const t of group) seen.set(t.id, t);
+
+  // Ad copy per task: launch_holds (doc-pipeline, authoritative buyer copy) -> description
+  // sections -> null (the UI flags null; the submit endpoint independently refuses it).
+  let holds = new Map();
+  if (SERVICE && seen.size) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${holdsQuery([...seen.keys()])}`,
+        { headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` } });
+      if (r.ok) holds = holdsByTaskId(await r.json());
+    } catch { /* holds unreachable -> description-only extraction still works */ }
+  }
+  for (const t of seen.values()) {
+    const copy = extractAdCopy({ holdAdCopy: holds.get(t.id) || null, description: t.description });
+    t.headline = copy.headline; t.primary_text = copy.primary_text;
+  }
+
   return {
     tasks: [...seen.values()].sort((a, b) => a.name.localeCompare(b.name)),
     lists_scanned: lists.length,
