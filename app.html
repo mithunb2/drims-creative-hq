@@ -1581,12 +1581,15 @@ function _renderDiscovery(panel,form,bms){
   bmSel.addEventListener('change',()=>{
     const b=bms[+bmSel.value]; assets.innerHTML=''; if(!b) return;
     setInput('business_manager_id',b.business_manager_id);
-    const acc=_dd('Ad account',(b.ad_accounts||[]).map(a=>[a.ad_account_id,(a.name||a.ad_account_id)+' · '+a.ad_account_id+(a.bm_owned?'':' ⚠ client')]));
+    // Cross-BM is supported (agency model): "shared" assets live in another BM and are shared into
+    // this one — a neutral fact, not a warning. Capability is decided by the system user's page
+    // tasks (Test connection), never by ownership.
+    const acc=_dd('Ad account',(b.ad_accounts||[]).map(a=>[a.ad_account_id,(a.name||a.ad_account_id)+' · '+a.ad_account_id+(a.bm_owned?'':' · shared')]));
     acc.el.addEventListener('change',()=>setInput('ad_account_id',acc.el.value));
-    const pg=_dd('Page',(b.pages||[]).map(p=>[p.page_id,(p.name||p.page_id)+(p.bm_owned?'  ✓ BM-owned':'  ⚠ CLIENT — will fail')]));
+    const pg=_dd('Page',(b.pages||[]).map(p=>[p.page_id,(p.name||p.page_id)+(p.bm_owned?'  · BM-owned':'  · shared (cross-BM)')]));
     const pgWarn=el('<div class="ms-pgwarn"></div>');
     pg.el.addEventListener('change',()=>{ setInput('page_id',pg.el.value); const p=(b.pages||[]).find(x=>x.page_id===pg.el.value);
-      pgWarn.innerHTML=(p&&!p.bm_owned)?'<span class="ms-warn">⚠ CLIENT page — dev-mode creative creation will FAIL. Pick a BM-owned page.</span>':(p?'<span class="ms-ok">✓ BM-owned — safe to launch.</span>':''); });
+      pgWarn.innerHTML=p?('<span class="ms-ok">'+(p.bm_owned?'BM-owned page.':'Shared (cross-BM) page — supported.')+' Run Test connection to verify the system user\'s Create content + Advertise tasks.</span>'):''; });
     const px=_dd('Pixel',(b.pixels||[]).map(p=>[p.pixel_id,(p.name||p.pixel_id)])); px.el.addEventListener('change',()=>setInput('pixel_id',px.el.value));
     const cc=_dd('Custom conversion',(b.custom_conversions||[]).map(c=>[c.custom_conversion_id,(c.name||c.custom_conversion_id)])); cc.el.addEventListener('change',()=>setInput('custom_conversion_id',cc.el.value));
     const ig=_dd('Instagram actor',(b.ig_accounts||[]).map(g=>[g.ig_actor_id,(g.username||g.ig_actor_id)])); ig.el.addEventListener('change',()=>setInput('ig_actor_id',ig.el.value));
@@ -1602,7 +1605,9 @@ function _renderChecks(c){
   h+=row('Account reachable',c.account.ok,[c.account.name,c.account.detail].filter(Boolean).join(' · '));
   h+=row('ASL (spend ceiling)',c.asl.ok,c.asl.detail);
   h+=row('Page tasks (Create+Advertise)',c.page_tasks.ok,c.page_tasks.detail);
-  h+=row('Page BM-owned',c.page_bm_owned.ok,c.page_bm_owned.detail);
+  // page_ownership is informational (cross-BM shared pages are fully supported) — always "ok".
+  if(c.page_ownership) h+=row('Page ownership (info)',true,c.page_ownership.detail);
+  else if(c.page_bm_owned) h+=row('Page BM-owned',c.page_bm_owned.ok,c.page_bm_owned.detail); /* old server build */
   h+=`<div class="ms-ready ${c.ready?'ok':'no'}">${c.ready?'✓ READY — this store can launch':'✗ NOT READY — fix the red checks before launching'}</div>`;
   return h;
 }
@@ -2506,7 +2511,7 @@ function _wlDeadlineMs(off){const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'
    "Production" LIST is empty while production-stage tasks sit in Creative Pipeline at
    "ready for testing". So the default scans every list in the store's folder and filters by
    status, labelling which list each task came from. The toggle exposes literal-list behaviour. */
-let _cuStores=null,_cuStore='',_cuListOnly=false,_cuMeta='';
+let _cuStores=null,_cuStore='',_cuListOnly=false,_cuMeta='',_cuTasks=[],_cuSel=new Set(),_cuOpen=new Set();
 
 async function _cuApi(qs){
   // Send the Supabase session JWT — the endpoint refuses unauthenticated callers, so the
@@ -2572,46 +2577,240 @@ async function _cuRender(){
     <b>Partial load</b> — ${d.errors.length} list${d.errors.length===1?'':'s'} failed, so tasks may be missing:
     <div class="ph-sub" style="font-size:12px;margin-top:5px">${_esc(d.errors.join(' · '))}</div>
     <div class="ph-sub" style="font-size:12px;margin-top:5px">Reload the store to retry.</div></div>`:'';
-  body.innerHTML=warn+tasks.map(_cuCard).join('');
+  _cuTasks=tasks;
+  // Drop selections that no longer exist (store switch / reload); keep valid ones.
+  _cuSel=new Set([...(_cuSel||[])].filter(id=>tasks.some(t=>t.id===id&&t.drive_link)));
+  body.innerHTML=warn+_cuSelBar()+'<div class="panel" style="padding:0;overflow:hidden">'+tasks.map(_cuRow).join('')+'</div>';
+  _cuWire(body);
   icons();
+}
+
+/* ── multi-select grouped launch UI ──────────────────────────────────────────
+   Rows in ClickUp style: checkbox (Drive-link tasks only) · name/ID · assignee · status ·
+   due date · Drive · expand arrow → full detail. "Publish to Meta" opens the launch config
+   modal, which drives lib/launch/options.js — the SAME engine the server revalidates with. */
+const _cuFmtDue=ms=>{if(!ms)return '—';const d=new Date(+ms);return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});};
+
+function _cuSelBar(){
+  const selectable=_cuTasks.filter(t=>t.drive_link);
+  const n=_cuSel.size;
+  return `<div class="panel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px;position:sticky;top:0;z-index:5">
+    <label class="ph-sub" style="font-size:12.5px;display:flex;align-items:center;gap:7px">
+      <input type="checkbox" id="cuSelAll"${selectable.length&&n===selectable.length?' checked':''}${selectable.length?'':' disabled'}>
+      Select all with a video (${selectable.length})</label>
+    <span class="ph-sub" style="font-size:12px" id="cuSelCount">${n?n+' selected':''}</span>
+    <button class="rev-btn" id="cuPublish" style="margin-left:auto"${n?'':' disabled'}>
+      <i data-lucide="rocket"></i>Publish to Meta${n?' ('+n+')':''}</button></div>`;
+}
+
+function _cuRow(t){
+  const sel=_cuSel.has(t.id),open=_cuOpen.has(t.id),can=!!t.drive_link;
+  const who=(t.assignees||[]).join(', ')||'—';
+  return `<div style="border-bottom:1px solid rgba(127,127,127,.14)">
+    <div style="display:flex;gap:11px;align-items:center;padding:10px 14px">
+      <input type="checkbox" class="cuChk" data-id="${_esc(t.id)}"${sel?' checked':''}${can?'':' disabled'}
+        title="${can?'select for launch':'no Drive link — not launchable yet'}">
+      <button class="cuExp" data-id="${_esc(t.id)}" style="background:none;border:0;cursor:pointer;padding:2px;color:inherit"
+        aria-label="details"><i data-lucide="${open?'chevron-down':'chevron-right'}"></i></button>
+      <div style="flex:1;min-width:160px"><b style="font-size:13.5px">${_esc(t.name||'Untitled')}</b>
+        <span class="ph-sub" style="font-size:11px;margin-left:7px"><code>${_esc(t.id)}</code></span></div>
+      <span class="ph-sub" style="font-size:12px;min-width:110px">${_esc(who)}</span>
+      <span class="tag">${_esc(t.status||'—')}</span>
+      <span class="ph-sub" style="font-size:12px;min-width:52px" title="due date">${_cuFmtDue(t.due_date)}</span>
+      ${can?`<a class="rev-btn" href="${_esc(t.drive_link)}" target="_blank" rel="noopener" title="video in Drive"><i data-lucide="film"></i></a>`
+           :'<span class="ph-sub" style="font-size:11px">no video</span>'}
+    </div>
+    ${open?`<div style="padding:0 14px 12px 56px">${_cuDetail(t)}</div>`:''}
+  </div>`;
+}
+
+function _cuDetail(t){
+  const did=_cuDriveId(t.drive_link);
+  const chips=Object.entries(t.chips||{}).map(([k,v])=>`<span class="tag">${_esc(k)}: ${_esc(v)}</span>`).join('');
+  const desc=(t.description||'').trim();
+  return `<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+    ${did?`<a href="${_esc(t.drive_link)}" target="_blank" rel="noopener" style="flex:none">
+      <img src="https://drive.google.com/thumbnail?id=${_esc(did)}&sz=w220" alt=""
+           style="width:132px;height:auto;border-radius:6px;display:block;background:rgba(127,127,127,.14)"
+           onerror="this.style.display='none'"></a>`:''}
+    <div style="flex:1;min-width:220px">
+      ${t.angle?`<div><span class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em">Angle</span>
+        <div style="font-size:13px;margin-top:2px">${_esc(t.angle)}</div></div>`:''}
+      ${t.persona?`<div style="margin-top:7px"><span class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em">Persona</span>
+        <div style="font-size:13px;margin-top:2px">${_esc(t.persona)}</div></div>`:''}
+      ${chips?`<div class="tags" style="margin-top:8px">${chips}</div>`:''}
+      <div style="margin-top:8px"><a class="rev-btn" href="${_esc(t.url||'#')}" target="_blank" rel="noopener"><i data-lucide="external-link"></i>Open in ClickUp</a></div>
+      ${desc?`<details style="margin-top:8px"><summary class="ph-sub" style="cursor:pointer;font-size:12.5px">Full brief / description</summary>
+        <pre style="margin:6px 0 0;white-space:pre-wrap;font-size:12.5px;line-height:1.55;font-family:inherit">${_esc(desc)}</pre></details>`:''}
+    </div></div>`;
+}
+
+// Delegated (assigned, not added) handlers — idempotent across every partial re-render, so no
+// element ever accumulates duplicate listeners no matter how often rows/bar are replaced.
+function _cuWire(body){
+  body.onchange=e=>{
+    if(e.target.classList&&e.target.classList.contains('cuChk')){
+      const id=e.target.dataset.id; e.target.checked?_cuSel.add(id):_cuSel.delete(id); _cuRefreshBar(body);
+    }else if(e.target.id==='cuSelAll'){
+      _cuSel=e.target.checked?new Set(_cuTasks.filter(t=>t.drive_link).map(t=>t.id)):new Set(); _cuRerow(body);
+    }};
+  body.onclick=e=>{
+    const exp=e.target.closest&&e.target.closest('.cuExp');
+    if(exp){const id=exp.dataset.id; _cuOpen.has(id)?_cuOpen.delete(id):_cuOpen.add(id); _cuRerow(body); return;}
+    if(e.target.closest&&e.target.closest('#cuPublish'))_cuLaunchModal();
+  };
+}
+function _cuRerow(body){
+  const wrap=body.querySelector('.panel[style*="padding:0"]');
+  if(wrap)wrap.innerHTML=_cuTasks.map(_cuRow).join('');
+  _cuRefreshBar(body); icons();
+}
+function _cuRefreshBar(body){
+  const bar=body.querySelector('.panel[style*="sticky"]'); if(!bar)return;
+  bar.outerHTML=_cuSelBar(); icons();
+}
+
+/* ── launch config modal — drives lib/launch/options.js live ── */
+async function _cuLaunchModal(){
+  const selected=_cuTasks.filter(t=>_cuSel.has(t.id));
+  if(!selected.length)return;
+  // The engine is IMPORTED, not reimplemented — same module the server revalidates with.
+  const eng=await import('/lib/launch/options.js');
+  let cfgs=[];
+  try{const r=await fetch('/api/store-meta');const j=await r.json();cfgs=j.configs||[];}catch(e){}
+  if(!cfgs.length){alert('No store Meta configs exist yet — set one up in Meta Setup first.');return;}
+  const folder=(_cuStores||[]).find(s=>s.id===_cuStore);
+  const nrm=s=>String(s||'').trim().toLowerCase().replace(/[\s_]+/g,' ');
+  const guess=cfgs.find(c=>nrm(c.store_name)===nrm(folder&&folder.name)||nrm(c.store_slug)===nrm(folder&&folder.name))||cfgs[0];
+
+  const ov=document.createElement('div');
+  ov.id='cuLM';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto';
+  ov.innerHTML=`<div class="panel" style="max-width:980px;width:100%;padding:20px 22px">
+    <div style="display:flex;align-items:center;gap:10px"><i data-lucide="rocket"></i>
+      <b style="font-size:16px">Publish ${selected.length} video${selected.length===1?'':'s'} to Meta</b>
+      <button id="lmClose" class="rev-btn" style="margin-left:auto">Close</button></div>
+    <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:18px;margin-top:16px;align-items:start">
+      <div id="lmForm" style="display:flex;flex-direction:column;gap:10px">
+        <label class="ph-sub" style="font-size:12px">Store config
+          <select id="lmStore" style="width:100%;padding:6px 8px;margin-top:3px">${cfgs.map(c=>`<option value="${_esc(c.store_slug)}"${c.store_slug===guess.store_slug?' selected':''}>${_esc(c.store_name||c.store_slug)}</option>`).join('')}</select></label>
+        <label class="ph-sub" style="font-size:12px">Campaign objective
+          <select id="lmObj" style="width:100%;padding:6px 8px;margin-top:3px">${eng.OBJECTIVES.map(o=>`<option>${o}</option>`).join('')}</select></label>
+        <div class="ph-sub" style="font-size:12px">Budget mode
+          <label style="margin-left:8px"><input type="radio" name="lmMode" value="CBO" checked> CBO</label>
+          <label style="margin-left:10px"><input type="radio" name="lmMode" value="ABO"> ABO</label></div>
+        <label class="ph-sub" style="font-size:12px"><span id="lmBudLbl">Daily budget (campaign) $</span>
+          <input id="lmBudget" type="number" min="0" step="1" value="0" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+        <div id="lmTrueTotal" style="font-size:12.5px;font-weight:600"></div>
+        <label class="ph-sub" style="font-size:12px">Campaign spend cap $ (0 = none)
+          <input id="lmCap" type="number" min="0" step="1" value="0" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+        <label class="ph-sub" style="font-size:12px">Videos per ad set
+          <input id="lmPer" type="number" min="1" step="1" value="${eng.DEFAULTS.videos_per_adset}" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+        <label class="ph-sub" style="font-size:12px">Run days (blank = every day)
+          <input id="lmDays" placeholder="MON,TUE,WED…" style="width:100%;padding:6px 8px;margin-top:3px"></label>
+        <label class="ph-sub" style="font-size:12px">Targeting JSON (blank = store/account default)
+          <textarea id="lmTgt" rows="2" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace;font-size:11.5px"></textarea></label>
+        <label class="ph-sub" style="font-size:12px">Ad account (from store config — edits are validated server-side)
+          <input id="lmAcct" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace"></label>
+        <label class="ph-sub" style="font-size:12px">Page (from store config — edits are validated server-side)
+          <input id="lmPage" style="width:100%;padding:6px 8px;margin-top:3px;font-family:monospace"></label>
+        <button id="lmGo" class="rev-btn" style="justify-content:center;font-weight:600"><i data-lucide="rocket"></i>Publish (builds PAUSED)</button>
+        <div id="lmMsg" class="ph-sub" style="font-size:12.5px"></div>
+      </div>
+      <div><div class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Structure preview — live</div>
+        <div id="lmPrev" style="font-size:12.5px"></div></div>
+    </div></div>`;
+  document.body.appendChild(ov); icons();
+  const $m=s=>ov.querySelector(s);
+  $m('#lmClose').addEventListener('click',()=>ov.remove());
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+
+  const nameEdits={campaign:null,adsets:{},ads:{}};   // operator renames, applied via applyEdits
+  const storeCfg=()=>cfgs.find(c=>c.store_slug===$m('#lmStore').value)||{};
+  const fillIdentity=()=>{const c=storeCfg();$m('#lmAcct').value=c.ad_account_id||'';$m('#lmPage').value=c.page_id||'';};
+  fillIdentity();
+
+  const readOpts=()=>({
+    videos_per_adset:Math.max(1,parseInt($m('#lmPer').value,10)||1),
+    objective:$m('#lmObj').value,
+    budget_mode:ov.querySelector('input[name=lmMode]:checked').value,
+    daily_budget_usd:Math.max(0,parseFloat($m('#lmBudget').value)||0),
+    spend_cap_usd:Math.max(0,parseFloat($m('#lmCap').value)||0),
+    schedule:{start_time:null,end_time:null,run_days:$m('#lmDays').value.trim()?$m('#lmDays').value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean):null},
+    targeting:(()=>{const v=$m('#lmTgt').value.trim();if(!v)return null;try{return JSON.parse(v);}catch(e){return null;}})(),
+    account_id:$m('#lmAcct').value.trim()||null,
+    page_id:$m('#lmPage').value.trim()||null,
+  });
+  const readEdits=()=>{
+    const e={};
+    if(nameEdits.campaign)e.campaign={name:nameEdits.campaign};
+    if(Object.keys(nameEdits.adsets).length)e.adsets=Object.fromEntries(Object.entries(nameEdits.adsets).map(([i,n])=>[i,{name:n}]));
+    if(Object.keys(nameEdits.ads).length)e.ads=Object.fromEntries(Object.entries(nameEdits.ads).map(([k,n])=>[k,{name:n}]));
+    return Object.keys(e).length?e:null;
+  };
+
+  function recompute(){
+    const c=storeCfg();
+    let plan,err=null;
+    try{
+      const opts=eng.resolveOptions(readOpts(),c);
+      plan=eng.buildPlan(selected.map(t=>({task_id:t.id,name:t.name,drive_link:t.drive_link})),opts,c,{dateStr:new Date().toISOString().slice(0,10)});
+      const ed=readEdits(); if(ed)plan=eng.applyEdits(plan,ed);
+    }catch(ex){err=ex.message;}
+    const mode=ov.querySelector('input[name=lmMode]:checked').value;
+    $m('#lmBudLbl').textContent=mode==='CBO'?'Daily budget (campaign) $':'Daily budget PER AD SET $';
+    if(err){$m('#lmPrev').innerHTML='<span class="ms-warn">'+_esc(err)+'</span>';$m('#lmTrueTotal').textContent='';return null;}
+    const total=eng.totalDailySpend(plan);
+    // ABO truth: the entered number is PER AD SET — surface the real total loudly.
+    $m('#lmTrueTotal').innerHTML=mode==='ABO'
+      ?`TRUE total: ${plan.adsets.length} ad set${plan.adsets.length===1?'':'s'} × $${(plan.adsets[0]&&plan.adsets[0].daily_budget_usd||0)} = <b>$${total.toFixed(2)}/day</b>`
+      :`Total daily spend: <b>$${total.toFixed(2)}/day</b>`;
+    $m('#lmPrev').innerHTML=`
+      <div style="border:1px solid rgba(127,127,127,.25);border-radius:8px;padding:10px 12px">
+        <input data-ne="c" value="${_esc(plan.campaign.name)}" style="width:100%;font-weight:600;padding:4px 6px">
+        <div class="ph-sub" style="font-size:11.5px;margin-top:3px">${_esc(plan.campaign.objective)} · ${plan.campaign.budget_mode} · account <code>${_esc(plan.account_id)}</code> · page <code>${_esc(plan.page_id)}</code> · <b>PAUSED</b></div>
+        ${plan.adsets.map((a,i)=>`<div style="margin:9px 0 0 12px;border-left:2px solid rgba(127,127,127,.3);padding-left:10px">
+          <input data-ne="s${i}" value="${_esc(a.name)}" style="width:100%;padding:3px 6px;font-size:12.5px">
+          <div class="ph-sub" style="font-size:11px">${a.daily_budget_usd!=null?('$'+a.daily_budget_usd+'/day · '):''}${a.ads.length} ad${a.ads.length===1?'':'s'}</div>
+          ${a.ads.map((ad,j)=>`<div style="margin:4px 0 0 12px;display:flex;gap:6px;align-items:center">
+            <i data-lucide="film" style="width:13px"></i>
+            <input data-ne="a${i},${j}" value="${_esc(ad.name)}" style="flex:1;padding:2px 6px;font-size:12px">
+          </div>`).join('')}
+        </div>`).join('')}
+      </div>`;
+    ov.querySelectorAll('[data-ne]').forEach(inp=>inp.addEventListener('change',e=>{
+      const k=e.target.dataset.ne;
+      if(k==='c')nameEdits.campaign=e.target.value;
+      else if(k[0]==='s')nameEdits.adsets[k.slice(1)]=e.target.value;
+      else if(k[0]==='a')nameEdits.ads[k.slice(1)]=e.target.value;
+      recompute();}));
+    icons();
+    return plan;
+  }
+  ['#lmObj','#lmBudget','#lmCap','#lmPer','#lmDays','#lmTgt','#lmAcct','#lmPage'].forEach(s=>$m(s).addEventListener('input',recompute));
+  ov.querySelectorAll('input[name=lmMode]').forEach(r=>r.addEventListener('change',recompute));
+  $m('#lmStore').addEventListener('change',()=>{fillIdentity();recompute();});
+  recompute();
+
+  $m('#lmGo').addEventListener('click',async()=>{
+    const plan=recompute(); if(!plan)return;
+    $m('#lmGo').disabled=true; $m('#lmMsg').textContent='Validating server-side…';
+    try{
+      const jwt=await _accessToken();
+      const r=await fetch('/api/launch-group-submit',{method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
+        body:JSON.stringify({folder_id:_cuStore,store_slug:$m('#lmStore').value,
+          task_ids:selected.map(t=>t.id),options:readOpts(),edits:readEdits()})});
+      const j=await r.json();
+      if(j.ok){$m('#lmMsg').innerHTML='<span class="ms-ok">✓ '+_esc(j.message||j.status)+'</span>';}
+      else{$m('#lmMsg').innerHTML='<span class="ms-warn">'+_esc(j.reason||j.status||('HTTP '+r.status))+'</span>';$m('#lmGo').disabled=false;}
+    }catch(e){$m('#lmMsg').innerHTML='<span class="ms-warn">'+_esc(String(e))+'</span>';$m('#lmGo').disabled=false;}
+  });
 }
 
 const _cuDriveId=u=>{const m=String(u||'').match(/\/d\/([A-Za-z0-9_-]{10,})/)||String(u||'').match(/[?&]id=([A-Za-z0-9_-]{10,})/);return m?m[1]:null;};
 
-function _cuCard(t){
-  const drive=t.drive_link,did=_cuDriveId(drive);
-  const chips=Object.entries(t.chips||{}).map(([k,v])=>`<span class="tag">${_esc(k)}: ${_esc(v)}</span>`).join('');
-  const who=(t.assignees||[]).map(_esc).join(', ')||'—';
-  const desc=(t.description||'').trim();
-  return `<div class="panel" style="margin-bottom:12px;padding:0;overflow:hidden">
-    <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;flex-wrap:wrap">
-      ${did?`<a href="${_esc(drive)}" target="_blank" rel="noopener" style="flex:none">
-        <img src="https://drive.google.com/thumbnail?id=${_esc(did)}&sz=w220" alt=""
-             style="width:132px;height:auto;border-radius:6px;display:block;background:rgba(127,127,127,.14)"
-             onerror="this.style.display='none'"></a>`:''}
-      <div style="flex:1;min-width:240px">
-        <div style="display:flex;gap:9px;align-items:baseline;flex-wrap:wrap">
-          <b style="font-size:15px">${_esc(t.name||'Untitled')}</b>
-          <span class="tag">${_esc(t.status||'—')}</span>
-          <span class="ph-sub" style="font-size:11.5px">${_esc(t.list||'')}</span>
-          <a class="rev-btn" style="margin-left:auto" href="${_esc(t.url||'#')}" target="_blank" rel="noopener"><i data-lucide="external-link"></i>ClickUp</a>
-        </div>
-        <div class="ph-sub" style="font-size:12px;margin-top:5px"><code>${_esc(t.id)}</code> · ${who}</div>
-        ${t.angle?`<div style="margin-top:9px"><span class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em">Angle</span>
-          <div style="font-size:13.5px;margin-top:2px">${_esc(t.angle)}</div></div>`:''}
-        ${t.persona?`<div style="margin-top:7px"><span class="ph-sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em">Persona</span>
-          <div style="font-size:13px;margin-top:2px">${_esc(t.persona)}</div></div>`:''}
-        ${chips?`<div class="tags" style="margin-top:9px">${chips}</div>`:''}
-        ${drive?`<div style="margin-top:10px"><a class="rev-btn" href="${_esc(drive)}" target="_blank" rel="noopener"><i data-lucide="film"></i>Open video in Drive</a></div>`:
-                `<div class="ph-sub" style="margin-top:10px;font-size:12px">No Drive link on this task yet.</div>`}
-      </div>
-    </div>
-    ${desc?`<details style="border-top:1px solid rgba(127,127,127,.18)">
-      <summary style="cursor:pointer;padding:10px 16px;font-size:12.5px" class="ph-sub">Full brief / description</summary>
-      <pre style="margin:0;padding:0 16px 14px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;font-family:inherit">${_esc(desc)}</pre>
-    </details>`:''}
-  </div>`;
-}
+/* (single-card renderer replaced by _cuRow/_cuDetail above — multi-select grouped launch) */
 
 function _cuToken(){let t=localStorage.getItem('cu_token');if(!t){t=prompt('Paste your ClickUp personal API token (stored only in this browser; used to write due dates):');if(t){t=t.trim();localStorage.setItem('cu_token',t);}}return (t||'').trim();}
 function _cuTokenQuiet(){return (localStorage.getItem('cu_token')||'').trim();}   // never prompts (read-only surfaces)

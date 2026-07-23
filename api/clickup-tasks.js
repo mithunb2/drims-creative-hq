@@ -137,6 +137,7 @@ function slim(task, listName) {
     status: (task.status && task.status.status) || '',
     url: task.url || '',
     list: listName,
+    due_date: task.due_date ? Number(task.due_date) : null,   // ms epoch (ClickUp sends a string)
     assignees: (task.assignees || []).map((a) => a.username || a.email || '').filter(Boolean),
     description: task.description || '',
     angle: field(task, 'Angle'),

@@ -26,7 +26,9 @@ test('registry.json is a current projection of the source (no drift)', () => {
 test('launch CODE is store-agnostic (no hardcoded store names)', () => {
   const terms = [...allStoreTerms()].filter((t) => t && t.length >= 4); // skip trivially-short terms
   const files = [];
-  for (const [dir, ext] of [['lib/launch', '.js'], ['api/launch', '.js']]) {
+  // NB: 'api' (flat) is where every serverless endpoint actually lives — there is no api/launch/
+  // subdirectory, so the original ['api/launch'] entry scanned nothing.
+  for (const [dir, ext] of [['lib/launch', '.js'], ['api/launch', '.js'], ['api', '.js']]) {
     let entries = [];
     try { entries = readdirSync(new URL(`${dir}/`, root)); } catch { /* dir may not exist yet */ }
     for (const f of entries) if (f.endsWith(ext)) files.push(`${dir}/${f}`);

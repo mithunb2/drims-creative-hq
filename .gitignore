@@ -43,3 +43,5 @@ results.json
 
 # Vercel
 .vercel/
+.vercel
+.env*

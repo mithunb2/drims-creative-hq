@@ -61,14 +61,27 @@ export default async function handler(req, res) {
     out.page_tasks = { ok: tasksOk, tasks,
       detail: tasksOk ? 'Create content + Advertise present' : (!p ? 'page not assigned to this system user' : `missing tasks (has ${tasks.join(', ') || 'none'})`) };
 
-    let owned = false;
+    // INFORMATIONAL ONLY — never part of readiness. Cross-BM is fully supported (Meta's agency
+    // model): a store's page may live in a DIFFERENT Business Manager and be shared into this one,
+    // in which case it appears under client_pages and NEVER under owned_pages. The real capability
+    // gate is page_tasks above (system user's assigned pages + CREATE_CONTENT/ADVERTISE), which is
+    // ownership-agnostic. (The old page_bm_owned readiness check falsely rejected valid cross-BM
+    // setups — the actual historical blocker was app dev-mode, not page ownership.)
+    let ownership = 'unknown';
     if (cfg.business_manager_id) {
-      const op = await fb(`${cfg.business_manager_id}/owned_pages`, token, proof, 'id');
-      owned = ((op.j.data) || []).some((x) => x.id === cfg.page_id);
+      const [op, cp] = await Promise.all([
+        fb(`${cfg.business_manager_id}/owned_pages`, token, proof, 'id'),
+        fb(`${cfg.business_manager_id}/client_pages`, token, proof, 'id'),
+      ]);
+      if (((op.j.data) || []).some((x) => x.id === cfg.page_id)) ownership = 'bm_owned';
+      else if (((cp.j.data) || []).some((x) => x.id === cfg.page_id)) ownership = 'shared_into_bm';
+      else ownership = 'not_visible_in_bm';
     }
-    out.page_bm_owned = { ok: owned, detail: owned ? 'BM-owned ✓' : 'NOT BM-owned (client/partner page → dev-mode creative will fail)' };
+    out.page_ownership = { ok: true, ownership,
+      detail: { bm_owned: 'BM-owned', shared_into_bm: 'shared into this BM (cross-BM — supported)',
+        not_visible_in_bm: 'not listed in this BM (owned or client) — check the share', unknown: 'no BM id configured' }[ownership] };
 
-    out.ready = ['token_valid', 'account', 'asl', 'page_tasks', 'page_bm_owned'].every((k) => out[k].ok);
+    out.ready = ['token_valid', 'account', 'asl', 'page_tasks'].every((k) => out[k].ok);
     return res.status(200).json({ slug, checks: out });   // NB: token never included in the response
   } catch (err) {
     console.error('[api/store-meta-test] error:', err);

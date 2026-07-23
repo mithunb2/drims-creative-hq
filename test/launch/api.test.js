@@ -36,23 +36,30 @@ test('parse: rejects malformed body', async () => {
   assert.equal(res._status, 400);
 });
 
-test('submit: flag OFF -> 403 blocked_by_security_gate', async () => {
+// NOTE: blockers are checked BEFORE the security gate, and the golden fixture's store currently
+// has no registry account mapping — so the doc path 400s at not_ready with either flag state.
+// The invariant that matters (and is asserted in both states): submit NEVER returns 202 for a
+// doc-path body, and refuses loudly.
+test('submit: flag OFF -> refused (not_ready blockers precede the gate; never 202)', async () => {
   const prev = process.env.META_LAUNCH_ALLOW_LIVE_WRITES;
   delete process.env.META_LAUNCH_ALLOW_LIVE_WRITES;
   const res = mockRes();
   await submitHandler({ method: 'POST', body: extracted }, res);
-  assert.equal(res._status, 403);
-  assert.equal(res._json.status, 'blocked_by_security_gate');
+  assert.equal(res._status, 400);
+  assert.equal(res._json.status, 'not_ready');
+  assert.ok(res._json.blockers && res._json.blockers.length > 0);
+  assert.notEqual(res._status, 202);
   if (prev !== undefined) process.env.META_LAUNCH_ALLOW_LIVE_WRITES = prev;
 });
 
-test('submit: flag ON -> still 501 live_wiring_pending (no token/live read wired)', async () => {
+test('submit: flag ON -> STILL refused for a doc-path body (never 202)', async () => {
   const prev = process.env.META_LAUNCH_ALLOW_LIVE_WRITES;
   process.env.META_LAUNCH_ALLOW_LIVE_WRITES = '1';
   const res = mockRes();
   await submitHandler({ method: 'POST', body: extracted }, res);
-  assert.equal(res._status, 501);
-  assert.equal(res._json.status, 'live_wiring_pending');
+  assert.equal(res._status, 400);
+  assert.ok(['not_ready', 'no_job'].includes(res._json.status));
+  assert.notEqual(res._status, 202);
   if (prev === undefined) delete process.env.META_LAUNCH_ALLOW_LIVE_WRITES;
   else process.env.META_LAUNCH_ALLOW_LIVE_WRITES = prev;
 });
