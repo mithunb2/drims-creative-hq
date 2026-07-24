@@ -1076,8 +1076,8 @@ function _mountSection(section,slug,name,data){
   if(section==='meta'){ _mountMetaSetup(box,slug,name); return; }   // REAL — carries the prod credential lock
   // Steps 2–5 replace these with the extracted, store-scoped section views.
   const soon=(msg)=>{ box.appendChild(el(`<div class="panel" style="padding:26px 20px"><div class="ph-sub" style="font-size:12.5px"><b>${_esc(name)}</b> — ${_esc(msg)}</div></div>`)); icons(); };
+  if(section==='production'){ _mountProduction(box,slug); return; }   // REAL — store-scoped by the route slug
   ({creative:()=>soon('Creative (angles · hooks · personas) mounts here — migrating from Store View in step 3.'),
-    production:()=>soon('Production Tasks mount here — migrating from ClickUp Production Tasks in step 2.'),
     liveads:()=>soon('Live Ads (per-store, with spend / ROAS / CPA) mounts here — step 4.'),
     winners:()=>soon('Winners for this store — step 5.'),
     kill:()=>soon('Kill List for this store — step 5.'),
@@ -2741,6 +2741,28 @@ function _wlDeadlineMs(off){const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'
    "ready for testing". So the default scans every list in the store's folder and filters by
    status, labelling which list each task came from. The toggle exposes literal-list behaviour. */
 let _cuStores=null,_cuStore='',_cuListOnly=false,_cuMeta='',_cuTasks=[],_cuSel=new Set(),_cuOpen=new Set();
+// When set (store workspace context), the store is FIXED by the route: the Publish modal locks
+// #lmStore to this slug instead of a free dropdown. '' = the old #cutasks tab (dropdown-driven).
+let _cuFixedSlug='';
+// Production section of the store workspace: same task list + Publish flow as the #cutasks tab, but
+// store-scoped by the ROUTE slug (no store dropdown). Reuses _cuRender / _cuRow / _cuWire / the launch
+// modal verbatim — the ONLY change vs the tab is where store_slug comes from (route, not a picker),
+// and the server's store/task mismatch guard runs identically on the submitted {store_slug, task_ids}.
+async function _mountProduction(box,slug){
+  _cuFixedSlug=slug; _cuSel=new Set();
+  if(!_cuStores){ const d=await _cuApi('action=stores'); _cuStores=d.ok?(d.stores||[]):[]; }
+  const folder=(_cuStores||[]).find(s=>_folderSlug(s.name)===slug);
+  if(!folder){ box.appendChild(emptyState('inbox','No ClickUp folder for this store','No discoverable Creative Pipeline / Production folder maps to this store.')); icons(); return; }
+  _cuStore=folder.id;
+  // Bar has NO store dropdown (store = route) and NO Meta Setup (its own section). #cuBody/#cuCount
+  // ids are reused by _cuRender — safe because the old tab is never mounted at the same time.
+  box.innerHTML=`<div class="panel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <label class="ph-sub" style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="cuListOnly"${_cuListOnly?' checked':''}> Production <b>list</b> only</label>
+    <span class="ph-sub" style="font-size:11.5px" id="cuCount"></span></div><div id="cuBody"></div>`;
+  const lo=box.querySelector('#cuListOnly'); if(lo)lo.addEventListener('change',async e=>{_cuListOnly=e.target.checked;await _cuRender();});
+  await _cuRender();
+  icons();
+}
 // Reflect the current store selection into the URL hash (#cutasks/<slug>) — preserving any sub-tab arg.
 function _syncCuHash(){ if(_route.tab!=='cutasks')return; const f=(_cuStores||[]).find(s=>s.id===_cuStore); setRouteArgs(f?_folderSlug(f.name):'', _route.a2); }
 
@@ -2755,6 +2777,7 @@ async function _cuApi(qs){
 
 async function viewCUTasks(){
   const v=$('#view'); v.innerHTML=''; charts.length=0;
+  _cuFixedSlug='';   // the standalone tab is dropdown-driven — clear any workspace route lock
   v.appendChild(el(viewHead('clapperboard','ClickUp Production Tasks',
     'Live from ClickUp — every store discovered automatically, with each task\'s brief, angle and delivered video.')));
 
@@ -3018,6 +3041,20 @@ async function _cuLaunchModal(){
     </div></div>`;
   document.body.appendChild(ov); icons();
   const $m=s=>ov.querySelector(s);
+  // WORKSPACE CONTEXT: store comes from the ROUTE, not the dropdown. Lock #lmStore to the route slug
+  // so store_slug on preview/submit is the route store — the server's store/task mismatch guard then
+  // runs on {route store_slug, this folder's task_ids} exactly as it did dropdown-driven. If the route
+  // store has no Meta config, the value is still the route slug and the server refuses it (correct).
+  if(_cuFixedSlug){
+    const sel=$m('#lmStore');
+    if(sel){
+      if(![...sel.options].some(o=>o.value===_cuFixedSlug)){
+        const c=cfgs.find(x=>x.store_slug===_cuFixedSlug);
+        sel.insertAdjacentHTML('afterbegin',`<option value="${_esc(_cuFixedSlug)}">${_esc((c&&c.store_name)||_cuFixedSlug)}</option>`);
+      }
+      sel.value=_cuFixedSlug; sel.disabled=true; sel.title='Store is fixed by the workspace route';
+    }
+  }
   $m('#lmClose').addEventListener('click',()=>ov.remove());
   ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
 
