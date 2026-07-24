@@ -64,6 +64,17 @@ async function requireUser(req) {
 const PROD_STATUSES = (process.env.CLICKUP_PROD_STATUSES || 'ready for testing,testing,scale')
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
+// A folder is a STORE only if it contains the pipeline the whole system reads from — a
+// "Creative Pipeline" OR "Production" list. This is STRUCTURAL (keyed off the pipeline lists,
+// not a blocklist of folder names): utility folders (A/B Testing, Projects, Product Research,
+// General Tasks) have neither and drop out automatically. Override the markers via env if the
+// team ever renames the lists — still no hardcoded folder names.
+const STORE_LIST_MARKERS = (process.env.CLICKUP_STORE_LIST_MARKERS || 'creative pipeline,production')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+const isStoreFolder = (f) =>
+  (f.lists || []).some((l) => STORE_LIST_MARKERS.some((m) => (l.name || '').toLowerCase().includes(m)));
+export { isStoreFolder, STORE_LIST_MARKERS };   // named exports for unit testing (handler stays default)
+
 // Warm-lambda cache. Discovery is stable minute-to-minute; tasks are short-lived.
 const CACHE = { stores: null, storesAt: 0 };
 const STORES_TTL_MS = 5 * 60 * 1000;
@@ -96,7 +107,8 @@ async function discoverStores() {
         }));
       } catch { return []; }
     }));
-    for (const group of perSpace) for (const f of group) if (f.lists.length) out.push(f);
+    // Only real stores: a folder must carry a Creative Pipeline / Production list (structural).
+    for (const group of perSpace) for (const f of group) if (isStoreFolder(f)) out.push(f);
   }
 
   out.sort((a, b) => a.name.localeCompare(b.name));

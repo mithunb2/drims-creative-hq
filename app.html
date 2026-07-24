@@ -599,7 +599,7 @@ async function enterApp(session){
   if(_entered)return; _entered=true;
   $('#login').classList.add('hide');$('#app').classList.remove('hide');
   const email=session.user.email||'';$('#userEmail').textContent=email;$('#avatar').textContent=(email[0]||'?').toUpperCase();
-  await loadAll();routeTo(location.hash.replace('#','')||'overview');
+  await loadAll();{const _h=parseHash();routeTo(_h.tab,_h.a1,_h.a2);}
 }
 
 /* data */
@@ -948,11 +948,28 @@ const LAUNCH_UI_HIDDEN=!!(window.DRIMS_CONFIG&&(DRIMS_CONFIG.LAUNCH_UI_HOSTS_HID
 const CRED_UI_HIDDEN=!!(window.DRIMS_CONFIG&&(DRIMS_CONFIG.CREDENTIAL_UI_HOSTS_HIDDEN||[]).includes(location.hostname));
 const LAUNCH_HIDDEN_TABS=['pipeline','liveads'];   // hidden together on prod (launch + live-ad control)
 let _pipeStage=1;   // which Launch-Pipeline stage to open (1=Upload&Split · 2=In Production · 3=Review&Launch)
-function routeTo(tab){
-  if(tab==='split'){tab='pipeline';_pipeStage=1;} else if(tab==='launch'){tab='pipeline';_pipeStage=3;}  // old links → unified view
+
+/* ── HASH ROUTER ── URL is the single source of truth for view state: #<tab>/<arg1>/<arg2>
+   (e.g. #cutasks/cake_craft_academy/liveads). Survives refresh + back/forward, and links are
+   shareable. `_route` holds the current {tab,a1,a2}; views read _route.a1/a2 on ENTRY to preselect,
+   and call setRouteArgs() when their own selection changes so the URL always reflects the view.
+   In-session tab-switch persistence still works via each view's module var; the hash adds refresh,
+   back-button, and share. Programmatic hash writes are guarded by _hashLock so they don't re-dispatch. */
+let _route={tab:'overview',a1:'',a2:''};
+let _hashLock=false;
+function parseHash(){ const p=(location.hash||'').replace(/^#/,'').split('/').map(x=>{try{return decodeURIComponent(x);}catch(e){return x;}}); return {tab:p[0]||'overview',a1:p[1]||'',a2:p[2]||''}; }
+function writeHash(tab,a1,a2){ const parts=[tab]; if(a1){parts.push(a1); if(a2)parts.push(a2);} const h='#'+parts.map(encodeURIComponent).join('/'); if(location.hash!==h){_hashLock=true;location.hash=h;} }
+// Update the CURRENT tab's args without re-dispatching the view (dropdown/sub-tab changes).
+function setRouteArgs(a1,a2){ _route.a1=a1||''; _route.a2=a2===undefined?_route.a2:(a2||''); writeHash(_route.tab,_route.a1,_route.a2); }
+window.addEventListener('hashchange',()=>{ if(_hashLock){_hashLock=false;return;} const h=parseHash(); routeTo(h.tab,h.a1,h.a2); });
+
+function routeTo(tab,a1,a2){
+  if(tab==='split'){tab='pipeline';a1=a1||'1';} else if(tab==='launch'){tab='pipeline';a1=a1||'3';}  // old links → unified view
+  _route={tab,a1:a1||'',a2:a2||''};
+  if(tab==='pipeline') _pipeStage=Number(_route.a1)||_pipeStage||1;   // stage lives in arg1
   if(LAUNCH_UI_HIDDEN) document.querySelectorAll(LAUNCH_HIDDEN_TABS.map(t=>`#nav [data-tab="${t}"]`).join(',')).forEach(b=>{b.style.display='none';});
   if(LAUNCH_UI_HIDDEN&&LAUNCH_HIDDEN_TABS.includes(tab)){
-    location.hash=tab;charts.length=0;
+    writeHash(tab);charts.length=0;
     document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
     $('#view').innerHTML='<div class="panel" style="text-align:center;padding:46px 20px;max-width:520px;margin:0 auto">'
       +'<div class="soon" style="margin:0 auto 12px"><i data-lucide="rocket"></i>Phase 2 — coming</div>'
@@ -960,7 +977,7 @@ function routeTo(tab){
       +'<p class="ph-sub" style="margin:0 auto">The doc → tasks → launch pipeline unlocks once the security runbook is cleared.</p></div>';
     icons();return;
   }
-  location.hash=tab;
+  writeHash(tab,_route.a1,_route.a2);
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
   ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,teamx:viewTeamUnified,pipeline:viewPipeline,liveads:viewLiveAds,cutasks:viewCUTasks}[tab]||viewOverview)();
@@ -1012,6 +1029,7 @@ async function viewPipeline(){
 }
 function mountStage(n){
   _pipeStage=n;
+  if(_route.tab==='pipeline')setRouteArgs(String(n));   // stage → URL (#pipeline/<n>)
   document.querySelectorAll('.pl-seg button,.pl-rail .pl-stage').forEach(b=>b.classList.toggle('on',+b.dataset.stage===n));
   const mount=$('#stageMount');
   if(n===1) viewSplit(mount);            // existing Doc→Tasks view, mounted here
@@ -1966,11 +1984,15 @@ let selectedStore=null;
 function viewDeepDive(){
   const v=$('#view'),stores=DATA.products;v.innerHTML='';
   if(!stores.length){v.appendChild(emptyState('scan-search','No stores yet','Run the sync to populate stores.'));icons();return;}
+  // Resolve the store from the URL (#deepdive/<slug>) on entry; else keep the in-session selection.
+  if(_route.a1){const p=stores.find(s=>_folderSlug(storeName(s))===_route.a1); if(p)selectedStore=p.id;}
   if(!selectedStore||!stores.find(s=>s.id===selectedStore))selectedStore=stores[0].id;
+  const _ddSync=()=>{const p=stores.find(s=>s.id===selectedStore); if(_route.tab==='deepdive')setRouteArgs(p?_folderSlug(storeName(p)):'');};
+  _ddSync();
   v.appendChild(el(viewHead('scan-search','Store View','Angles, hooks, personas &amp; outcomes for the selected store.',
     `<select class="sel" id="storeSel">${stores.map(s=>`<option value="${s.id}" ${s.id===selectedStore?'selected':''}>${storeName(s)}</option>`).join('')}</select><span class="pill" id="ddTotal"></span>`)));
   v.appendChild(el('<div id="ddBody"></div>'));
-  $('#storeSel').addEventListener('change',e=>{selectedStore=e.target.value;renderDeepDive();});
+  $('#storeSel').addEventListener('change',e=>{selectedStore=e.target.value;_ddSync();renderDeepDive();});
   renderDeepDive();
 }
 function renderDeepDive(){
@@ -2583,6 +2605,8 @@ function _wlDeadlineMs(off){const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'
    "ready for testing". So the default scans every list in the store's folder and filters by
    status, labelling which list each task came from. The toggle exposes literal-list behaviour. */
 let _cuStores=null,_cuStore='',_cuListOnly=false,_cuMeta='',_cuTasks=[],_cuSel=new Set(),_cuOpen=new Set();
+// Reflect the current store selection into the URL hash (#cutasks/<slug>) — preserving any sub-tab arg.
+function _syncCuHash(){ if(_route.tab!=='cutasks')return; const f=(_cuStores||[]).find(s=>s.id===_cuStore); setRouteArgs(f?_folderSlug(f.name):'', _route.a2); }
 
 async function _cuApi(qs){
   // Send the Supabase session JWT — the endpoint refuses unauthenticated callers, so the
@@ -2614,10 +2638,14 @@ async function viewCUTasks(){
     $('#cuStoreSel').innerHTML='<option value="">unavailable</option>';icons();return;
   }
   _cuStores=d.stores||[];
+  // Resolve the store from the URL (#cutasks/<slug>) on entry; else keep the in-session selection.
+  if(_route.a1){const f=_cuStores.find(s=>_folderSlug(s.name)===_route.a1); if(f)_cuStore=f.id;}
+  if(_cuStore&&!_cuStores.some(s=>s.id===_cuStore))_cuStore='';
+  _syncCuHash();
   const sel=$('#cuStoreSel');
   sel.innerHTML='<option value="">Select a store… ('+_cuStores.length+' found)</option>'
     +_cuStores.map(s=>`<option value="${_esc(s.id)}"${s.id===_cuStore?' selected':''}>${_esc(s.name)}</option>`).join('');
-  sel.addEventListener('change',async e=>{_cuStore=e.target.value;await _cuMountMeta();await _cuRender();});
+  sel.addEventListener('change',async e=>{_cuStore=e.target.value;_syncCuHash();await _cuMountMeta();await _cuRender();});
   $('#cuListOnly').addEventListener('change',async e=>{_cuListOnly=e.target.checked;await _cuRender();});
   await _cuMountMeta();
   await _cuRender();
@@ -3082,7 +3110,7 @@ async function viewWorkload(){
   await renderWorkload();
   // auto-refresh while on this tab (data syncs every 10 min); skip if mid-edit
   _wlTimer=setInterval(()=>{
-    if((location.hash||'').replace('#','')!=='workload'){clearInterval(_wlTimer);_wlTimer=null;return;}
+    if(parseHash().tab!=='workload'){clearInterval(_wlTimer);_wlTimer=null;return;}
     if((document.activeElement||{}).className==='wcapin')return;
     renderWorkload();
   },60000);
@@ -3310,7 +3338,7 @@ async function viewPerformance(){
   await renderPerformance();
   // soft auto-refresh (current period includes today; data syncs ~10 min) — keep range, skip mid-edit
   _perfTimer=setInterval(()=>{
-    if((location.hash||'').replace('#','')!=='performance'){clearInterval(_perfTimer);_perfTimer=null;return;}
+    if(parseHash().tab!=='performance'){clearInterval(_perfTimer);_perfTimer=null;return;}
     if(/perfdate/.test((document.activeElement||{}).className||''))return;
     renderPerformance();
   },60000);
