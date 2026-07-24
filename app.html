@@ -67,6 +67,9 @@ a{color:var(--indigo);text-decoration:none}
 .topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:11px 20px}
 .topbar .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;letter-spacing:-0.02em;white-space:nowrap}
+.topbar .hdr-store{display:flex;align-items:center;gap:6px;margin-left:16px}
+.topbar .hdr-store i{width:15px;height:15px;color:var(--mut,#64748b);flex:none}
+.topbar .hdr-store select.sel{min-width:180px;padding:7px 11px;font-size:13px}
 .topbar .logo{width:28px;height:28px;border-radius:8px}.topbar .logo [data-lucide]{width:16px;height:16px}
 .grow{flex:1}
 .badge{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;border:1px solid transparent}
@@ -530,6 +533,9 @@ table.tbl tbody tr:hover{background:var(--bg)}
 <section id="app" class="hide">
   <header class="topbar">
     <div class="brand"><div class="logo"><i data-lucide="command"></i></div><span>Creative HQ</span></div>
+    <label class="hdr-store" title="Applies to Store View, Inspirations, Production Tasks, Live Ads">
+      <i data-lucide="store"></i>
+      <select class="sel" id="globalStore"><option value="">All stores</option></select></label>
     <div class="grow"></div>
     <span class="badge dead" id="syncBadge"><span class="dot"></span><span id="syncText">checking</span></span>
     <div class="who"><span class="av" id="avatar">?</span><span class="em" id="userEmail"></span>
@@ -599,7 +605,10 @@ async function enterApp(session){
   if(_entered)return; _entered=true;
   $('#login').classList.add('hide');$('#app').classList.remove('hide');
   const email=session.user.email||'';$('#userEmail').textContent=email;$('#avatar').textContent=(email[0]||'?').toUpperCase();
-  await loadAll();{const _h=parseHash();routeTo(_h.tab,_h.a1,_h.a2);}
+  await loadAll();
+  { const gs=$('#globalStore'); if(gs) gs.addEventListener('change',e=>_onGlobalStoreChange(e.target.value)); }
+  _initGlobalStores();
+  {const _h=parseHash();routeTo(_h.tab,_h.a1,_h.a2);}
 }
 
 /* data */
@@ -963,9 +972,14 @@ function writeHash(tab,a1,a2){ const parts=[tab]; if(a1){parts.push(a1); if(a2)p
 function setRouteArgs(a1,a2){ _route.a1=a1||''; _route.a2=a2===undefined?_route.a2:(a2||''); writeHash(_route.tab,_route.a1,_route.a2); }
 window.addEventListener('hashchange',()=>{ if(_hashLock){_hashLock=false;return;} const h=parseHash(); routeTo(h.tab,h.a1,h.a2); });
 
+// Per-store tabs share ONE store selection (the header selector → gStore, a slug). The selection
+// rides the current tab's hash arg1 so it survives refresh/back and stays shareable; gStore carries
+// it across tab switches. Portfolio tabs ignore it and grey the selector out (_syncGlobalStoreSel).
+const PER_STORE_TABS=new Set(['deepdive','inspo','cutasks','liveads']);
 function routeTo(tab,a1,a2){
   if(tab==='split'){tab='pipeline';a1=a1||'1';} else if(tab==='launch'){tab='pipeline';a1=a1||'3';}  // old links → unified view
   _route={tab,a1:a1||'',a2:a2||''};
+  if(PER_STORE_TABS.has(tab)){ if(_route.a1) gStore=_route.a1; else _route.a1=gStore; }   // link/hash wins, else carry
   if(tab==='pipeline') _pipeStage=Number(_route.a1)||_pipeStage||1;   // stage lives in arg1
   if(LAUNCH_UI_HIDDEN) document.querySelectorAll(LAUNCH_HIDDEN_TABS.map(t=>`#nav [data-tab="${t}"]`).join(',')).forEach(b=>{b.style.display='none';});
   if(LAUNCH_UI_HIDDEN&&LAUNCH_HIDDEN_TABS.includes(tab)){
@@ -980,8 +994,42 @@ function routeTo(tab,a1,a2){
   writeHash(tab,_route.a1,_route.a2);
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
+  _syncGlobalStoreSel();
   ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,teamx:viewTeamUnified,pipeline:viewPipeline,liveads:viewLiveAds,cutasks:viewCUTasks}[tab]||viewOverview)();
   icons();
+}
+/* ── Shared store selector (header) — the single per-store selector for Store View / Inspirations /
+   Production Tasks / Live Ads. gStore is the selected slug ('' = All stores). ──────────────────── */
+let gStore='';
+let gStores=[];   // [{slug,name,folderId?}] — the complete store universe (ClickUp discovery, 18)
+const _productBySlug=slug=>DATA.products.find(p=>_folderSlug(storeName(p))===slug)||null;
+const _storeNameBySlug=slug=>{const s=gStores.find(x=>x.slug===slug);return s?s.name:slug;};
+async function _initGlobalStores(){
+  // Phase 1 (instant): the 14 products, so the selector is never empty on first paint.
+  if(DATA.products.length){ gStores=DATA.products.map(p=>({slug:_folderSlug(storeName(p)),name:storeName(p)})); _fillGlobalStoreSel(); }
+  // Phase 2 (async): upgrade to the COMPLETE ClickUp-discovered list (18) — matches Production Tasks.
+  try{ const d=await _cuApi('action=stores'); if(d&&d.ok&&Array.isArray(d.stores)&&d.stores.length){
+        gStores=d.stores.map(s=>({slug:_folderSlug(s.name),name:s.name,folderId:s.id})); _fillGlobalStoreSel(); } }catch(e){}
+}
+function _fillGlobalStoreSel(){
+  const sel=$('#globalStore'); if(!sel)return;
+  sel.innerHTML='<option value="">All stores</option>'+
+    gStores.slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(s=>`<option value="${_esc(s.slug)}">${_esc(s.name)}</option>`).join('');
+  sel.value=gStore;
+}
+// Grey the selector out on portfolio tabs (Overview/Stores/Team/Winners/Pipeline) — a live control
+// that silently did nothing is exactly the confusing behaviour we're avoiding.
+function _syncGlobalStoreSel(){
+  const sel=$('#globalStore'); if(!sel)return;
+  const on=PER_STORE_TABS.has(_route.tab);
+  sel.disabled=!on; sel.style.opacity=on?1:.45; sel.style.cursor=on?'':'not-allowed';
+  sel.title=on?'Applies to Store View, Inspirations, Production Tasks, Live Ads':'Portfolio view — not store-specific';
+  sel.value=gStore;
+}
+function _onGlobalStoreChange(v){
+  gStore=v;
+  if(PER_STORE_TABS.has(_route.tab)) routeTo(_route.tab,gStore,_route.a2);   // re-render + update hash
 }
 
 /* ── Unified Launch Pipeline: ONE view, 3 sequential stages. Stage 1 & 3 REUSE the existing
@@ -1482,18 +1530,17 @@ function _laPerf(ad){
 }
 async function viewLiveAds(mount){
   const v=mount||$('#view'); v.innerHTML=''; _injectLiveAdsCSS();
-  const [adsAll,accts]=await Promise.all([safe('meta_ads'),safe('meta_accounts')]);
-  const acctById={}; (accts||[]).forEach(a=>acctById[a.account_id]=a);
-  // Per-store scoping via the URL hash (#liveads/<account_id>). Picker built from the synced accounts.
-  const acctIds=[...new Set((adsAll||[]).map(a=>a.account_id).concat((accts||[]).map(a=>a.account_id)))].filter(Boolean);
-  let acctSel=_route.a1&&acctIds.includes(_route.a1)?_route.a1:'';
-  if(_route.tab==='liveads')setRouteArgs(acctSel);
-  const ads=acctSel?(adsAll||[]).filter(a=>a.account_id===acctSel):(adsAll||[]);
-  const picker=acctIds.length>1?`<select class="sel" id="laAcct" style="margin-left:auto"><option value="">All accounts</option>${acctIds.map(id=>`<option value="${_esc(id)}"${id===acctSel?' selected':''}>${_esc((acctById[id]||{}).name||id)}</option>`).join('')}</select>`:'';
-  v.appendChild(el(`<div class="la-head"><div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0"><i data-lucide="radio"></i> Live Ads</h2>${picker}</div>
+  v.appendChild(el(`<div class="la-head"><h2 style="margin:0"><i data-lucide="radio"></i> Live Ads${gStore?(' — '+_esc(_storeNameBySlug(gStore))):''}</h2>
     <p class="la-sub">Flip an ad <b>live</b> (goes ACTIVE on Meta — spends real money, capped by the account's ASL) or <b>pause</b> it, and read live performance from Meta Insights. The <b>ASL is the spend ceiling</b>; an ad can't go live on an account with no spending limit.</p></div>`));
-  const _la=$('#laAcct'); if(_la)_la.addEventListener('change',e=>{setRouteArgs(e.target.value);viewLiveAds(mount);});
-  if(!ads||!ads.length){ v.appendChild(emptyState('radio','No synced ads yet','Build a PAUSED ad on the account, then meta_ads_sync (now scheduled, every 10 min) surfaces it here with a live/pause toggle and its spend / ROAS / CPA.')); icons(); return; }
+  if(!gStore){ v.appendChild(emptyState('store','No store selected','Pick a store in the header selector to see its live ads and performance.')); icons(); return; }
+  // Resolve the selected store → its ad account (store_meta_config), then show only that account's ads.
+  const [adsAll,accts,cfgRes]=await Promise.all([safe('meta_ads'),safe('meta_accounts'),fetch('/api/store-meta').then(r=>r.json()).catch(()=>({}))]);
+  const acctById={}; (accts||[]).forEach(a=>acctById[a.account_id]=a);
+  const cfg=((cfgRes&&cfgRes.configs)||[]).find(c=>c.store_slug===gStore);
+  const acctId=(cfg&&cfg.ad_account_id)||((window.DRIMS_CONFIG&&DRIMS_CONFIG.STORE_LAUNCH_ACCOUNTS||{})[gStore])||'';
+  if(!acctId){ v.appendChild(emptyState('shield','No ad account for '+_storeNameBySlug(gStore),'Set this store\'s Meta config (Business Manager + ad account) in Meta Setup, then its ads appear here.')); icons(); return; }
+  const ads=(adsAll||[]).filter(a=>a.account_id===acctId);
+  if(!ads.length){ v.appendChild(emptyState('radio','No synced ads for '+_storeNameBySlug(gStore)+' yet','Build a PAUSED ad on this account; meta_ads_sync (every 10 min) surfaces it here with a live/pause toggle and its spend / ROAS / CPA.')); icons(); return; }
   const wrap=el('<div class="la-grid"></div>');
   ads.forEach(ad=>{
     const acct=acctById[ad.account_id]||{};
@@ -2016,17 +2063,13 @@ const inPipeline=ads=>ads.filter(a=>PIPE_STAGES.has(stageOf(a))).length;
 const inProduction=ads=>ads.filter(a=>PROD_STAGES.has(stageOf(a))).length;
 let selectedStore=null;
 function viewDeepDive(){
-  const v=$('#view'),stores=DATA.products;v.innerHTML='';
-  if(!stores.length){v.appendChild(emptyState('scan-search','No stores yet','Run the sync to populate stores.'));icons();return;}
-  // Resolve the store from the URL (#deepdive/<slug>) on entry; else keep the in-session selection.
-  if(_route.a1){const p=stores.find(s=>_folderSlug(storeName(s))===_route.a1); if(p)selectedStore=p.id;}
-  if(!selectedStore||!stores.find(s=>s.id===selectedStore))selectedStore=stores[0].id;
-  const _ddSync=()=>{const p=stores.find(s=>s.id===selectedStore); if(_route.tab==='deepdive')setRouteArgs(p?_folderSlug(storeName(p)):'');};
-  _ddSync();
-  v.appendChild(el(viewHead('scan-search','Store View','Angles, hooks, personas &amp; outcomes for the selected store.',
-    `<select class="sel" id="storeSel">${stores.map(s=>`<option value="${s.id}" ${s.id===selectedStore?'selected':''}>${storeName(s)}</option>`).join('')}</select><span class="pill" id="ddTotal"></span>`)));
+  const v=$('#view');v.innerHTML='';
+  v.appendChild(el(viewHead('scan-search','Store View','Angles, hooks, personas &amp; outcomes for the selected store.','<span class="pill" id="ddTotal"></span>')));
+  if(!gStore){ v.appendChild(emptyState('store','No store selected','Pick a store in the header selector to see its angles, hooks and personas.')); icons(); return; }
+  const p=_productBySlug(gStore);
+  if(!p){ v.appendChild(emptyState('inbox','Nothing for '+_storeNameBySlug(gStore)+' yet','This store has no synced creatives — they appear here after the next 10-min sync.')); icons(); return; }
+  selectedStore=p.id;
   v.appendChild(el('<div id="ddBody"></div>'));
-  $('#storeSel').addEventListener('change',e=>{selectedStore=e.target.value;_ddSync();renderDeepDive();});
   renderDeepDive();
 }
 function renderDeepDive(){
@@ -2195,14 +2238,12 @@ function renderGenScript(g){
 }
 function viewInspo(){
   const v=$('#view');v.innerHTML='';
-  const stores=DATA.products;
-  if(!stores.length){v.appendChild(emptyState('lightbulb','No stores yet','Run the sync to populate stores.'));icons();return;}
-  if(!inspoStore||!stores.find(s=>s.id===inspoStore))inspoStore=stores[0].id;
-  v.appendChild(el(viewHead('lightbulb','Inspirations &amp; Winners','Adds write to the Brand Brain (source of truth), then syncs everywhere.',
-    `<select class="sel" id="inspoSel">${stores.map(s=>`<option value="${s.id}" ${s.id===inspoStore?'selected':''}>${storeName(s)}</option>`).join('')}</select>`)));
+  v.appendChild(el(viewHead('lightbulb','Inspirations','Adds write to the Brand Brain (source of truth), then syncs everywhere.','')));
+  if(!gStore){ v.appendChild(emptyState('lightbulb','No store selected','Pick a store in the header selector to manage its inspirations.')); icons(); return; }
+  const p=_productBySlug(gStore);
+  if(!p){ v.appendChild(emptyState('inbox','Not available for '+_storeNameBySlug(gStore)+' yet','This store isn\'t in the products table yet, so there\'s nothing to attach inspirations to.')); icons(); return; }
   const body=el('<div></div>');v.appendChild(body);
-  $('#inspoSel').addEventListener('change',e=>{inspoStore=e.target.value;_inspoManager(body,inspoStore);});
-  _inspoManager(body,inspoStore);icons();
+  inspoStore=p.id; _inspoManager(body,inspoStore);icons();
 }
 // Shared component: renders add-form + live winners/inspirations + remove, for ANY
 // container + store slug. Identical write path (inspiration_queue) everywhere it's used.
@@ -2654,33 +2695,22 @@ async function _cuApi(qs){
 async function viewCUTasks(){
   const v=$('#view'); v.innerHTML=''; charts.length=0;
   v.appendChild(el(viewHead('clapperboard','ClickUp Production Tasks',
-    'Live from ClickUp — every store discovered automatically, with each task\'s brief, angle and delivered video.')));
-
+    'Live from ClickUp — the selected store\'s production tasks, briefs and delivered videos.','')));
   const bar=el('<div class="panel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">'
-    +'<label class="ph-sub" style="font-size:12px">Store</label>'
-    +'<select id="cuStoreSel" style="min-width:240px;padding:7px 9px"><option value="">Discovering stores…</option></select>'
-    +'<label class="ph-sub" style="font-size:12px;display:flex;align-items:center;gap:6px;margin-left:auto">'
+    +'<label class="ph-sub" style="font-size:12px;display:flex;align-items:center;gap:6px">'
     +'<input type="checkbox" id="cuListOnly"'+(_cuListOnly?' checked':'')+'> Production <b>list</b> only</label>'
-    +'<span class="ph-sub" style="font-size:11.5px" id="cuCount"></span></div>');
+    +'<span class="ph-sub" style="font-size:11.5px;margin-left:auto" id="cuCount"></span></div>');
   v.appendChild(bar);
-  v.appendChild(el('<div id="cuMeta" style="margin-bottom:14px"></div>'));   // per-store Meta Setup (all 22 folders)
+  v.appendChild(el('<div id="cuMeta" style="margin-bottom:14px"></div>'));   // per-store Meta Setup
   v.appendChild(el('<div id="cuBody"></div>'));
-
-  const d=await _cuApi('action=stores');
-  if(!d.ok){
-    $('#cuBody').appendChild(emptyState('alert-triangle','Can\'t reach ClickUp',d.reason||'Unknown error.'));
-    $('#cuStoreSel').innerHTML='<option value="">unavailable</option>';icons();return;
-  }
-  _cuStores=d.stores||[];
-  // Resolve the store from the URL (#cutasks/<slug>) on entry; else keep the in-session selection.
-  if(_route.a1){const f=_cuStores.find(s=>_folderSlug(s.name)===_route.a1); if(f)_cuStore=f.id;}
-  if(_cuStore&&!_cuStores.some(s=>s.id===_cuStore))_cuStore='';
-  _syncCuHash();
-  const sel=$('#cuStoreSel');
-  sel.innerHTML='<option value="">Select a store… ('+_cuStores.length+' found)</option>'
-    +_cuStores.map(s=>`<option value="${_esc(s.id)}"${s.id===_cuStore?' selected':''}>${_esc(s.name)}</option>`).join('');
-  sel.addEventListener('change',async e=>{_cuStore=e.target.value;_syncCuHash();await _cuMountMeta();await _cuRender();});
   $('#cuListOnly').addEventListener('change',async e=>{_cuListOnly=e.target.checked;await _cuRender();});
+  if(!gStore){ $('#cuBody').appendChild(emptyState('store','No store selected','Pick a store in the header selector to load its production tasks.')); icons(); return; }
+  const d=await _cuApi('action=stores');
+  if(!d.ok){ $('#cuBody').appendChild(emptyState('alert-triangle','Can\'t reach ClickUp',d.reason||'Unknown error.')); icons();return; }
+  _cuStores=d.stores||[];
+  const folder=_cuStores.find(s=>_folderSlug(s.name)===gStore);
+  _cuStore=folder?folder.id:'';
+  if(!folder){ $('#cuBody').appendChild(emptyState('inbox','No ClickUp folder for '+_storeNameBySlug(gStore),'This store has no discoverable Creative Pipeline / Production folder.')); icons(); return; }
   await _cuMountMeta();
   await _cuRender();
   icons();
