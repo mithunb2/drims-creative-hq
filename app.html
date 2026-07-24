@@ -990,13 +990,15 @@ function routeTo(tab,a1,a2){
    time). Mobile: the sub-tab bar is a horizontal scroll strip; the store header stacks + stays on
    screen. Data reads go through _storeCache so leaving a store and returning does NOT refetch. ══ */
 let _storeCache=null;   // per-store SWR cache (lib/store_cache.js) — proven in store-cache.test.js
+const _scGet=(slug,key,fetcher)=>_storeCache?_storeCache.get(slug,key,fetcher):fetcher();   // fail-open if the cache module didn't load
 let gStores=[];         // [{slug,name}] store universe (instant products → upgraded to the 18)
 const _productBySlug=slug=>DATA.products.find(p=>_folderSlug(storeName(p))===slug)||null;
 const _storeNameBySlug=slug=>{const s=gStores.find(x=>x.slug===slug);const p=_productBySlug(slug);return (s&&s.name)||(p&&storeName(p))||slug;};
 // Sub-tabs land one per Phase-1 step. gate:'launch' → hidden on the prod launch host.
 const STORE_SUBTABS=[
-  {k:'storeview',label:'Store View',icon:'scan-search',gate:null,mount:(box,slug)=>_secStoreView(box,slug)},
-  {k:'meta',     label:'Meta Setup',icon:'settings-2', gate:null,mount:(box,slug)=>_mountMetaSetup(box,slug,_storeNameBySlug(slug))},
+  {k:'storeview', label:'Store View',      icon:'scan-search', gate:null,mount:(box,slug)=>_secStoreView(box,slug)},
+  {k:'production',label:'Production Tasks', icon:'clapperboard',gate:null,mount:(box,slug)=>_secProduction(box,slug)},
+  {k:'meta',      label:'Meta Setup',       icon:'settings-2',  gate:null,mount:(box,slug)=>_mountMetaSetup(box,slug,_storeNameBySlug(slug))},
 ];
 const _subById=k=>STORE_SUBTABS.find(s=>s.k===k);
 const _subGatedOut=s=>s&&s.gate==='launch'&&LAUNCH_UI_HIDDEN;
@@ -1008,7 +1010,7 @@ async function _initStores(){
 // Store identity for the header — cached per store (no refetch on return).
 function _storeMeta(slug){
   const fetcher=()=>fetch('/api/store-meta?slug='+encodeURIComponent(slug)).then(r=>r.ok?r.json():{}).catch(()=>({}));
-  return _storeCache?_storeCache.get(slug,'meta',fetcher):fetcher();
+  return _scGet(slug,'meta',fetcher);
 }
 async function viewStore(){
   _injectStoreCSS();
@@ -1049,6 +1051,37 @@ function _secStoreView(box,slug){
   box.innerHTML='<div style="margin:2px 2px 10px"><span class="pill" id="ddTotal"></span></div><div id="ddBody"></div>';
   renderDeepDive(true);   // skip Meta Setup — it's its own sub-tab
 }
+function _cuListBar(slug){
+  const bar=el('<div class="panel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><label class="ph-sub" style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="cuListOnly"'+(_cuListOnly?' checked':'')+'> Production <b>list</b> only</label></div>');
+  bar.querySelector('#cuListOnly').addEventListener('change',e=>{ _cuListOnly=e.target.checked; const box=$('#ssBody'); if(box)_secProduction(box,slug); });
+  return bar;
+}
+// Production Tasks — REAL section, store-scoped by the route slug, tasks loaded through the per-store
+// cache: first open fetches the slow ClickUp scan; leaving + returning (or a sub-tab hop) is instant,
+// with a background revalidate. Store is FIXED (no dropdown); the Publish flow locks to the route slug.
+async function _secProduction(box,slug){
+  _cuFixedSlug=slug;
+  box.innerHTML='<div class="panel" style="text-align:center;padding:26px"><span class="ph-sub">Loading tasks…</span></div>';
+  const stores=await _scGet('_all','discovery',()=>_cuApi('action=stores').then(d=>(d&&d.ok?(d.stores||[]):[])));
+  const folder=(stores||[]).find(s=>_folderSlug(s.name)===slug);
+  box.innerHTML=''; box.appendChild(_cuListBar(slug));
+  if(!folder){ box.appendChild(emptyState('inbox','No ClickUp folder for '+_storeNameBySlug(slug),'No discoverable Creative Pipeline / Production folder maps to this store.')); return; }
+  _cuStores=stores; _cuStore=folder.id;
+  const d=await _scGet(slug,'tasks'+(_cuListOnly?':list':''),
+    ()=>_cuApi('action=tasks&folder='+encodeURIComponent(folder.id)+(_cuListOnly?'&mode=list':'')));
+  if(!d||!d.ok){ box.appendChild(emptyState('alert-triangle','Couldn\'t load tasks',(d&&d.reason)||'Unknown error.')); return; }
+  _cuTasks=d.tasks||[];
+  _cuFilters={status:'',assignee:'',video:'',from:'',to:''};
+  _cuSel=new Set([...(_cuSel||[])].filter(id=>_cuTasks.some(t=>t.id===id&&t.drive_link)));
+  if(!_cuTasks.length){ box.appendChild(emptyState('inbox','No production tasks for '+_storeNameBySlug(slug),
+    _cuListOnly?'The "Production" list is empty — untick "Production list only" to see production-status tasks in other lists.':'No task is at a production status yet.')); return; }
+  const warn=d.partial?`<div class="panel" style="margin-bottom:12px;border-left:3px solid #d9a641"><b>Partial load</b> — ${d.errors.length} list(s) failed; some tasks may be missing.</div>`:'';
+  const listWrap=el('<div></div>');
+  listWrap.innerHTML=warn+_cuSelBar()+_cuFilterBar()+'<div class="panel" style="padding:0;overflow:hidden">'+_cuHeaderRow()+_cuVisible().map(_cuRow).join('')+'</div>';
+  box.appendChild(listWrap);
+  _cuWire(listWrap); _cuUpdateShown(listWrap);
+  icons();
+}
 function _injectStoreCSS(){
   if($('#ss-css'))return; const s=document.createElement('style'); s.id='ss-css';
   s.textContent=`
@@ -1062,6 +1095,8 @@ function _injectStoreCSS(){
   .ss-nav{display:flex;gap:2px;padding:0 8px;border-top:1px solid var(--line,#e5e7eb);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
   .ss-tab{display:flex;align-items:center;gap:6px;background:none;border:none;border-bottom:2px solid transparent;padding:11px 13px;font-size:13px;font-weight:600;color:var(--mut,#64748b);cursor:pointer;white-space:nowrap;flex:none}
   .ss-tab i{width:15px;height:15px;flex:none}.ss-tab.on{color:var(--ink,#111827);border-bottom-color:#7c3aed}
+  .cu-due{white-space:nowrap}.cu-due-none{color:var(--mut,#94a3b8);font-style:italic;opacity:.7}.cu-due-over{color:#dc2626;font-weight:700}
+  .cu-filters .sel{min-width:0}@media(max-width:600px){.cu-filters{gap:7px}.cu-filters .sel,.cu-filters input{font-size:12px}}
   @media(max-width:600px){.ss-switch{font-size:16px;max-width:52vw}.ss-id{padding:10px 12px}.ss-badge{margin-left:0;order:3}}`;
   document.head.appendChild(s);
 }
@@ -2722,6 +2757,7 @@ function _wlDeadlineMs(off){const ds=new Intl.DateTimeFormat('en-CA',{timeZone:'
    "ready for testing". So the default scans every list in the store's folder and filters by
    status, labelling which list each task came from. The toggle exposes literal-list behaviour. */
 let _cuStores=null,_cuStore='',_cuListOnly=false,_cuMeta='',_cuTasks=[],_cuSel=new Set(),_cuOpen=new Set();
+let _cuFixedSlug='';   // store space: the Publish modal's store is FIXED to the route slug (not a dropdown)
 // Reflect the current store selection into the URL hash (#cutasks/<slug>) — preserving any sub-tab arg.
 function _syncCuHash(){ if(_route.tab!=='cutasks')return; const f=(_cuStores||[]).find(s=>s.id===_cuStore); setRouteArgs(f?_folderSlug(f.name):'', _route.a2); }
 
@@ -2820,7 +2856,53 @@ async function _cuRender(){
    Rows in ClickUp style: checkbox (Drive-link tasks only) · name/ID · assignee · status ·
    due date · Drive · expand arrow → full detail. "Publish to Meta" opens the launch config
    modal, which drives lib/launch/options.js — the SAME engine the server revalidates with. */
-const _cuFmtDue=ms=>{if(!ms)return '—';const d=new Date(+ms);return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});};
+// Due date, task-aware. No date → muted italic dash (distinct from a real date). Past due AND not in
+// a terminal status → red "⚠ overdue".
+function _cuFmtDue(t){
+  const ms=t&&t.due_date;
+  if(!ms) return '<span class="cu-due cu-due-none" title="no due date">—</span>';
+  const d=new Date(+ms),today=new Date();today.setHours(0,0,0,0);
+  const done=/(complete|done|winner|loser|scale|approved)/i.test(t.status||'');
+  const over=(+d<+today)&&!done;
+  const label=d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  return `<span class="cu-due${over?' cu-due-over':''}" title="due ${label}${over?' · overdue':''}">${over?'⚠ ':''}${label}</span>`;
+}
+// Production Tasks filters (client-side, over the loaded tasks): status · assignee · has-video · due range.
+let _cuFilters={status:'',assignee:'',video:'',from:'',to:''};
+function _cuVisible(){
+  const f=_cuFilters;
+  return (_cuTasks||[]).filter(t=>{
+    if(f.status && (t.status||'')!==f.status) return false;
+    if(f.assignee && !(t.assignees||[]).includes(f.assignee)) return false;
+    if(f.video==='with' && !t.drive_link) return false;
+    if(f.video==='without' && t.drive_link) return false;
+    if(f.from && (!t.due_date || +new Date(t.due_date) < +new Date(f.from))) return false;
+    if(f.to && (!t.due_date || +new Date(t.due_date) > +new Date(f.to+'T23:59:59'))) return false;
+    return true;
+  });
+}
+function _cuFilterBar(){
+  const statuses=[...new Set((_cuTasks||[]).map(t=>t.status).filter(Boolean))].sort();
+  const people=[...new Set((_cuTasks||[]).flatMap(t=>t.assignees||[]))].sort();
+  const opt=(v,cur,lbl)=>`<option value="${_esc(v)}"${v===cur?' selected':''}>${_esc(lbl||v||'')}</option>`;
+  return `<div class="cu-filters panel" style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+    <select class="cuFilter sel" data-f="status" style="min-width:140px"><option value="">All statuses</option>${statuses.map(s=>opt(s,_cuFilters.status)).join('')}</select>
+    <select class="cuFilter sel" data-f="assignee" style="min-width:150px"><option value="">All assignees</option>${people.map(p=>opt(p,_cuFilters.assignee)).join('')}</select>
+    <select class="cuFilter sel" data-f="video" style="min-width:120px">${opt('',_cuFilters.video,'Any video')}${opt('with',_cuFilters.video,'Has video')}${opt('without',_cuFilters.video,'No video')}</select>
+    <label class="ph-sub" style="font-size:11.5px;display:flex;align-items:center;gap:5px">Due <input class="cuFilter" data-f="from" type="date" value="${_esc(_cuFilters.from)}" style="padding:5px 7px"> – <input class="cuFilter" data-f="to" type="date" value="${_esc(_cuFilters.to)}" style="padding:5px 7px"></label>
+    <button class="cuFilter rev-btn" data-f="clear" style="font-size:12px">Clear</button>
+    <span class="ph-sub" style="font-size:11.5px;margin-left:auto" id="cuShown"></span></div>`;
+}
+function _cuHeaderRow(){
+  return `<div style="display:flex;gap:11px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(127,127,127,.18);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);font-weight:700">
+    <span style="width:16px"></span><span style="width:18px"></span>
+    <span style="flex:1;min-width:160px">Task</span>
+    <span style="min-width:110px">Assignee</span><span style="min-width:60px">Status</span>
+    <span style="min-width:52px">Due</span><span>Video</span></div>`;
+}
+function _cuUpdateShown(root){
+  const e=(root||document).querySelector('#cuShown'); if(e) e.textContent=`showing ${_cuVisible().length} of ${(_cuTasks||[]).length}`;
+}
 
 function _cuSelBar(){
   const selectable=_cuTasks.filter(t=>t.drive_link);
@@ -2847,7 +2929,7 @@ function _cuRow(t){
         <span class="ph-sub" style="font-size:11px;margin-left:7px"><code>${_esc(t.id)}</code></span></div>
       <span class="ph-sub" style="font-size:12px;min-width:110px">${_esc(who)}</span>
       <span class="tag">${_esc(t.status||'—')}</span>
-      <span class="ph-sub" style="font-size:12px;min-width:52px" title="due date">${_cuFmtDue(t.due_date)}</span>
+      <span style="font-size:12px;min-width:52px">${_cuFmtDue(t)}</span>
       ${can?`<a class="rev-btn" href="${_esc(t.drive_link)}" target="_blank" rel="noopener" title="video in Drive"><i data-lucide="film"></i></a>`
            :'<span class="ph-sub" style="font-size:11px">no video</span>'}
     </div>
@@ -2880,12 +2962,19 @@ function _cuDetail(t){
 // element ever accumulates duplicate listeners no matter how often rows/bar are replaced.
 function _cuWire(body){
   body.onchange=e=>{
+    if(e.target.classList&&e.target.classList.contains('cuFilter')&&e.target.dataset.f&&e.target.dataset.f!=='clear'){
+      _cuFilters[e.target.dataset.f]=e.target.value; _cuRerow(body); return;
+    }
     if(e.target.classList&&e.target.classList.contains('cuChk')){
       const id=e.target.dataset.id; e.target.checked?_cuSel.add(id):_cuSel.delete(id); _cuRefreshBar(body);
     }else if(e.target.id==='cuSelAll'){
-      _cuSel=e.target.checked?new Set(_cuTasks.filter(t=>t.drive_link).map(t=>t.id)):new Set(); _cuRerow(body);
+      _cuSel=e.target.checked?new Set(_cuVisible().filter(t=>t.drive_link).map(t=>t.id)):new Set(); _cuRerow(body);
     }};
   body.onclick=e=>{
+    if(e.target.closest&&e.target.closest('.cuFilter[data-f="clear"]')){
+      _cuFilters={status:'',assignee:'',video:'',from:'',to:''};
+      const fb=body.querySelector('.cu-filters'); if(fb)fb.outerHTML=_cuFilterBar(); _cuRerow(body); return;
+    }
     const exp=e.target.closest&&e.target.closest('.cuExp');
     if(exp){const id=exp.dataset.id; _cuOpen.has(id)?_cuOpen.delete(id):_cuOpen.add(id); _cuRerow(body); return;}
     if(e.target.closest&&e.target.closest('#cuPublish'))_cuLaunchModal();
@@ -2893,8 +2982,8 @@ function _cuWire(body){
 }
 function _cuRerow(body){
   const wrap=body.querySelector('.panel[style*="padding:0"]');
-  if(wrap)wrap.innerHTML=_cuTasks.map(_cuRow).join('');
-  _cuRefreshBar(body); icons();
+  if(wrap)wrap.innerHTML=_cuHeaderRow()+_cuVisible().map(_cuRow).join('');
+  _cuRefreshBar(body); _cuUpdateShown(body); icons();
 }
 function _cuRefreshBar(body){
   const bar=body.querySelector('.panel[style*="sticky"]'); if(!bar)return;
@@ -2999,6 +3088,19 @@ async function _cuLaunchModal(){
     </div></div>`;
   document.body.appendChild(ov); icons();
   const $m=s=>ov.querySelector(s);
+  // Store space: lock #lmStore to the route slug so preview/submit send {route store_slug, this
+  // folder's tasks} — the server store/task mismatch guard runs identically, and the store can't be
+  // changed to the wrong one from inside a store's Production Tasks.
+  if(_cuFixedSlug){
+    const sel=$m('#lmStore');
+    if(sel){
+      if(![...sel.options].some(o=>o.value===_cuFixedSlug)){
+        const c=cfgs.find(x=>x.store_slug===_cuFixedSlug);
+        sel.insertAdjacentHTML('afterbegin',`<option value="${_esc(_cuFixedSlug)}">${_esc((c&&c.store_name)||_cuFixedSlug)}</option>`);
+      }
+      sel.value=_cuFixedSlug; sel.disabled=true; sel.title='Store is fixed by the store space';
+    }
+  }
   $m('#lmClose').addEventListener('click',()=>ov.remove());
   ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
 
