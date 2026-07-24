@@ -998,9 +998,10 @@ const _productBySlug=slug=>DATA.products.find(p=>_folderSlug(storeName(p))===slu
 const _storeNameBySlug=slug=>{const s=gStores.find(x=>x.slug===slug);const p=_productBySlug(slug);return (s&&s.name)||(p&&storeName(p))||slug;};
 // Sub-tabs land one per Phase-1 step. gate:'launch' → hidden on the prod launch host.
 const STORE_SUBTABS=[
-  {k:'storeview', label:'Store View',      icon:'scan-search', gate:null,mount:(box,slug)=>_secStoreView(box,slug)},
-  {k:'production',label:'Production Tasks', icon:'clapperboard',gate:null,mount:(box,slug)=>_secProduction(box,slug)},
-  {k:'meta',      label:'Meta Setup',       icon:'settings-2',  gate:null,mount:(box,slug)=>_mountMetaSetup(box,slug,_storeNameBySlug(slug))},
+  {k:'storeview', label:'Store View',      icon:'scan-search', gate:null,     mount:(box,slug)=>_secStoreView(box,slug)},
+  {k:'production',label:'Production Tasks', icon:'clapperboard',gate:null,     mount:(box,slug)=>_secProduction(box,slug)},
+  {k:'liveads',   label:'Live Ads',         icon:'radio',       gate:'launch', mount:(box,slug)=>_secLiveAds(box,slug)},   // hidden on prod launch host
+  {k:'meta',      label:'Meta Setup',       icon:'settings-2',  gate:null,     mount:(box,slug)=>_mountMetaSetup(box,slug,_storeNameBySlug(slug))},
 ];
 const _subById=k=>STORE_SUBTABS.find(s=>s.k===k);
 const _subGatedOut=s=>s&&s.gate==='launch'&&LAUNCH_UI_HIDDEN;
@@ -1091,6 +1092,49 @@ async function _secProduction(box,slug){
   box.appendChild(listWrap);
   _cuWire(listWrap); _cuUpdateShown(listWrap);
   icons();
+}
+// Live Ads — REAL section, scoped to the store's ad account (from its Meta config). Per-store config
+// comes from the SAME cached store-meta the header uses; the ads/accounts tables are cached globally,
+// so switching sub-tabs/stores and returning doesn't refetch. Prod hide-gate carried via gate:'launch'.
+async function _secLiveAds(box,slug){
+  _injectLiveAdsCSS();
+  box.innerHTML='<div class="panel" style="text-align:center;padding:26px"><span class="ph-sub">Loading…</span></div>';
+  const [meta,adsAll,accts]=await Promise.all([
+    _storeMeta(slug),
+    _scGet('_all','meta_ads',()=>safe('meta_ads')),
+    _scGet('_all','meta_accounts',()=>safe('meta_accounts')),
+  ]);
+  const cfg=(meta&&meta.config)||{};
+  const acctId=cfg.ad_account_id||((window.DRIMS_CONFIG&&DRIMS_CONFIG.STORE_LAUNCH_ACCOUNTS||{})[slug])||'';
+  const acctById={}; (accts||[]).forEach(a=>acctById[a.account_id]=a);
+  box.innerHTML='';
+  box.appendChild(el(`<div class="la-head"><h2 style="margin:0"><i data-lucide="radio"></i> Live Ads</h2>
+    <p class="la-sub">Flip an ad <b>live</b> (goes ACTIVE on Meta — spends real money, capped by the account's ASL) or <b>pause</b> it, and read live performance from Meta Insights. The <b>ASL is the spend ceiling</b>; an ad can't go live on an account with no spending limit.</p></div>`));
+  if(!acctId){ box.appendChild(emptyState('shield','No ad account for '+_storeNameBySlug(slug),'Set this store\'s Meta config (Business Manager + ad account) in Meta Setup, then its ads appear here.')); icons(); return; }
+  const ads=(adsAll||[]).filter(a=>a.account_id===acctId);
+  if(!ads.length){ box.appendChild(emptyState('radio','No synced ads for '+_storeNameBySlug(slug)+' yet','Build a PAUSED ad on this account; meta_ads_sync (every 10 min) surfaces it here with a live/pause toggle and its spend / ROAS / CPA.')); icons(); return; }
+  const wrap=el('<div class="la-grid"></div>');
+  ads.forEach(ad=>{
+    const acct=acctById[ad.account_id]||{};
+    const hasAsl=acct.spend_cap_cents&&Number(acct.spend_cap_cents)>0;
+    const asl=hasAsl?('$'+(acct.spend_cap_cents/100).toFixed(2)):'NONE';
+    const live=ad.effective_status==='ACTIVE';
+    const pending=ad.desired_status&&((ad.desired_status==='ACTIVE')!==live);
+    const card=el(`<div class="la-card ${live?'is-live':''}">
+      <div class="la-top"><span class="la-name">${_esc(ad.name||ad.ad_id)}</span>
+        <span class="la-badge ${live?'b-live':'b-paused'}">${pending?'PENDING…':(live?'● LIVE':'❚❚ PAUSED')}</span></div>
+      <div class="la-meta"><span><i data-lucide="megaphone"></i>${_esc(ad.account_id)}</span>
+        <span class="${hasAsl?'':'la-noasl'}"><i data-lucide="shield"></i>ASL ${asl}</span>
+        <span><i data-lucide="activity"></i>${_esc(ad.effective_status||'?')}</span></div>
+      ${_laPerf(ad)}
+      ${ad.last_error?`<div class="la-err">${_esc(ad.last_error)}</div>`:''}</div>`);
+    const sw=el(`<button class="la-toggle ${live?'on':'off'}" ${pending?'disabled':''} title="${live?'Pause this ad':'Set LIVE (spends, ASL-capped)'}"><span class="la-knob"></span><span>${live?'Live':'Paused'}</span></button>`);
+    const status=el('<div class="la-status"></div>');
+    if(!hasAsl&&!live) status.innerHTML='<span class="la-warn">No ASL on this account — activation is refused until a spending limit is set.</span>';
+    sw.addEventListener('click',()=>_toggleAd(ad,live?'PAUSED':'ACTIVE',sw,status));
+    card.appendChild(sw); card.appendChild(status); wrap.appendChild(card);
+  });
+  box.appendChild(wrap); icons();
 }
 function _injectStoreCSS(){
   if($('#ss-css'))return; const s=document.createElement('style'); s.id='ss-css';
