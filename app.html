@@ -1001,6 +1001,7 @@ const STORE_SUBTABS=[
   {k:'storeview', label:'Store View',      icon:'scan-search', gate:null,     mount:(box,slug)=>_secStoreView(box,slug)},
   {k:'production',label:'Production Tasks', icon:'clapperboard',gate:null,     mount:(box,slug)=>_secProduction(box,slug)},
   {k:'liveads',   label:'Live Ads',         icon:'radio',       gate:'launch', mount:(box,slug)=>_secLiveAds(box,slug)},   // hidden on prod launch host
+  {k:'inspo',     label:'Inspirations',     icon:'lightbulb',   gate:null,     mount:(box,slug)=>_secInspirations(box,slug)},
   {k:'meta',      label:'Meta Setup',       icon:'settings-2',  gate:null,     mount:(box,slug)=>_mountMetaSetup(box,slug,_storeNameBySlug(slug))},
 ];
 const _subById=k=>STORE_SUBTABS.find(s=>s.k===k);
@@ -1135,6 +1136,15 @@ async function _secLiveAds(box,slug){
     card.appendChild(sw); card.appendChild(status); wrap.appendChild(card);
   });
   box.appendChild(wrap); icons();
+}
+// Inspirations — REAL section, scoped to the store's product. Reuses _inspoManager verbatim (its
+// Brand-Brain write path via inspiration_queue is intact, and its "Add a winner or inspiration" panel
+// is always shown, so an empty store reads "add one here"). NOT cached: it's mutation-driven, so it
+// must read fresh after a write — the per-store cache is for the slow read-only ClickUp scan.
+function _secInspirations(box,slug){
+  const p=_productBySlug(slug);
+  if(!p){ box.appendChild(emptyState('inbox','Inspirations not available for '+_storeNameBySlug(slug)+' yet','This store isn\'t in the products table yet, so there\'s nothing to attach inspirations to.')); return; }
+  _inspoManager(box,p.id);
 }
 function _injectStoreCSS(){
   if($('#ss-css'))return; const s=document.createElement('style'); s.id='ss-css';
