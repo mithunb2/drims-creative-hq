@@ -42,12 +42,22 @@ window.DRIMS_CONFIG = {
   STORAGE_PREFIX: 'drims',
 
   // --- Launch pipeline UI visibility (Phase 1 ship) ---
-  // Hide the gated launch tabs (Doc→Tasks, Add Automation) on these hostnames until the
-  // Phase-2 security runbook is cleared, so the team doesn't see disabled tabs. This is
-  // VISIBILITY ONLY — the real gate is the SERVER env flag META_LAUNCH_ALLOW_LIVE_WRITES
-  // (launch physically cannot fire without it, regardless of the UI). Previews and
-  // localhost still show the tabs for development. Empty this list to reveal everywhere.
+  // Hide the gated launch surfaces on these hostnames until the security runbook is cleared,
+  // so the team doesn't see disabled tabs. This is VISIBILITY ONLY — the real gate is the
+  // SERVER env flag META_LAUNCH_ALLOW_LIVE_WRITES (launch physically cannot fire without it,
+  // regardless of the UI). Hides the "Launch Pipeline" AND "Live Ads" tabs (Live Ads is a live
+  // pause/activate control not behind that flag, so it hides here too). Previews and localhost
+  // still show them for development. Empty this list to reveal everywhere.
   LAUNCH_UI_HOSTS_HIDDEN: ['drims-creative-hq.vercel.app'],
+
+  // --- Credential-entry UI visibility (admin-only until the role split lands) ---
+  // On these hostnames the per-store Meta Setup form (raw ID entry, system-user token, app
+  // secret, OAuth discovery, Test connection) is REPLACED with a locked "admin-only" note, so
+  // buyers on prod have nothing they can paste a credential into. The ClickUp Production Tasks
+  // tab and its 22-store list still load — only the credential form is locked. Removed once
+  // per-buyer accounts + server role-gating (requireAdmin) replace this host-based lock.
+  // Previews and localhost still show the form (that's where the admin configures for now).
+  CREDENTIAL_UI_HOSTS_HIDDEN: ['drims-creative-hq.vercel.app'],
 
   // --- Store launch-account overrides (DISPLAY parity) ---
   // slug -> ad account the store's launches actually build on. Mirrors the server's

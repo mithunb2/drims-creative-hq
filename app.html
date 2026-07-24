@@ -943,11 +943,15 @@ $('#nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b)r
 // Launch UI is HIDDEN on production hostnames until Phase 2 (config.js). Visibility only —
 // the server env flag META_LAUNCH_ALLOW_LIVE_WRITES is the real, untouched gate.
 const LAUNCH_UI_HIDDEN=!!(window.DRIMS_CONFIG&&(DRIMS_CONFIG.LAUNCH_UI_HOSTS_HIDDEN||[]).includes(location.hostname));
+// Credential-entry surfaces (Meta Setup token/secret/raw-ID form) are locked on these hosts until
+// the role split lands — see _mountMetaSetup. Visibility only; the server never reads a browser token.
+const CRED_UI_HIDDEN=!!(window.DRIMS_CONFIG&&(DRIMS_CONFIG.CREDENTIAL_UI_HOSTS_HIDDEN||[]).includes(location.hostname));
+const LAUNCH_HIDDEN_TABS=['pipeline','liveads'];   // hidden together on prod (launch + live-ad control)
 let _pipeStage=1;   // which Launch-Pipeline stage to open (1=Upload&Split · 2=In Production · 3=Review&Launch)
 function routeTo(tab){
   if(tab==='split'){tab='pipeline';_pipeStage=1;} else if(tab==='launch'){tab='pipeline';_pipeStage=3;}  // old links → unified view
-  if(LAUNCH_UI_HIDDEN) document.querySelectorAll('#nav [data-tab="pipeline"]').forEach(b=>{b.style.display='none';});
-  if(LAUNCH_UI_HIDDEN&&tab==='pipeline'){
+  if(LAUNCH_UI_HIDDEN) document.querySelectorAll(LAUNCH_HIDDEN_TABS.map(t=>`#nav [data-tab="${t}"]`).join(',')).forEach(b=>{b.style.display='none';});
+  if(LAUNCH_UI_HIDDEN&&LAUNCH_HIDDEN_TABS.includes(tab)){
     location.hash=tab;charts.length=0;
     document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
     $('#view').innerHTML='<div class="panel" style="text-align:center;padding:46px 20px;max-width:520px;margin:0 auto">'
@@ -1514,7 +1518,16 @@ function _tokBadge(st){
   return {cls:'no',txt:'no token'};
 }
 async function _mountMetaSetup(wrap,slug,storeName){
-  _injectMetaSetupCSS(); wrap.innerHTML='<div class="ms-card" style="padding:12px 14px;color:var(--mut)">Loading Meta Setup…</div>';
+  _injectMetaSetupCSS();
+  // CREDENTIAL LOCK (prod host): no raw-ID, token, app-secret, discovery or Test-connection surface
+  // until per-buyer accounts + server role-gating land. The store still lists; only the form is
+  // replaced. The server is the real boundary — this is defense-in-depth, not the only lock.
+  if(CRED_UI_HIDDEN){
+    wrap.innerHTML='';
+    const locked=el(`<details class="ms-card"><summary><i data-lucide="lock"></i> Meta Setup — <b>${_esc(slug)}</b><span class="ms-tok no">admin only</span></summary><div class="ms-form" style="grid-template-columns:1fr"><div class="ph-sub" style="font-size:12px;line-height:1.5">Meta configuration — Business Manager, ad account, page, pixel, system-user token and app secret — is <b>admin-only</b> until per-buyer accounts and the role split land. There's nothing to enter here yet.</div></div></details>`);
+    wrap.appendChild(locked); icons(); return;
+  }
+  wrap.innerHTML='<div class="ms-card" style="padding:12px 14px;color:var(--mut)">Loading Meta Setup…</div>';
   let data={config:null,token_set:false,token_state:null};
   try{ const r=await fetch('/api/store-meta?slug='+encodeURIComponent(slug)); if(r.ok) data=await r.json(); }catch(e){}
   const c=data.config||{};
