@@ -980,8 +980,108 @@ function routeTo(tab,a1,a2){
   writeHash(tab,_route.a1,_route.a2);
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   charts.length=0;
-  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,teamx:viewTeamUnified,pipeline:viewPipeline,liveads:viewLiveAds,cutasks:viewCUTasks}[tab]||viewOverview)();
+  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,teamx:viewTeamUnified,pipeline:viewPipeline,liveads:viewLiveAds,cutasks:viewCUTasks,store:viewStore}[tab]||viewOverview)();
   icons();
+}
+
+/* ══ STORE WORKSPACE — store-first IA (#store/<slug>/<section>) ═══════════════════════════════════
+   A persistent header keeps the store's identity + config/READY state ON SCREEN for EVERY section —
+   the structural fix for the ambient-store-context mismatch bug. Section switching swaps only the
+   body; the header never leaves. Phase 1: shell + routing + header; Meta Setup is the one real
+   section (proves the cred-lock carries), the rest are placeholders filled in steps 2–5.
+   Each section will become a self-contained mount(container, slug) — the Phase-2 module boundary. */
+const STORE_SECTIONS=[
+  {k:'creative',   label:'Creative',         icon:'scan-search',  gate:null},
+  {k:'production', label:'Production Tasks',  icon:'clapperboard', gate:null},
+  {k:'liveads',    label:'Live Ads',         icon:'radio',        gate:'launch'},  // hidden on prod launch host
+  {k:'meta',       label:'Meta Setup',       icon:'settings-2',   gate:null},       // cred-locked on prod host (inside _mountMetaSetup)
+  {k:'winners',    label:'Winners',          icon:'award',        gate:null},
+  {k:'kill',       label:'Kill List',        icon:'skull',        gate:null},
+  {k:'brain',      label:'Brand Brain',      icon:'brain',        gate:null},
+];
+const STORE_SECTION_KEYS=new Set(STORE_SECTIONS.map(s=>s.k));
+const STALE_READY_DAYS=14;   // a READY verdict older than this reads "stale — retest", never green
+const _swGatedOut=s=>s&&s.gate==='launch'&&LAUNCH_UI_HIDDEN;
+const _storeProduct=slug=>DATA.products.find(p=>_folderSlug(storeName(p))===slug)||null;
+
+// Config/READY badge — cheap: derives from token_state (Configured vs Not set up) + the CACHED test
+// verdict (config.ready/ready_at, written by store-meta-test in step 6). A cached READY is NOT trusted
+// forever: older than STALE_READY_DAYS → "Stale — retest", not green. ready_at is always shown.
+function _readyBadge(ts){
+  if(!ts||ts.source==='none'||!ts.source) return {cls:'no',txt:'Not set up',sub:'no Meta config / token'};
+  if(ts.ready===true&&ts.ready_at){
+    const days=Math.floor((Date.now()-new Date(ts.ready_at).getTime())/864e5);
+    return days>STALE_READY_DAYS
+      ? {cls:'stale',txt:'Stale — retest',sub:`last passed ${days}d ago`}
+      : {cls:'ok',txt:'READY',sub:`tested ${days}d ago`};
+  }
+  if(ts.ready===false) return {cls:'no',txt:'Not ready',sub:ts.ready_detail||'last test failed'};
+  return {cls:'cfg',txt:'Configured',sub:'not tested yet'};
+}
+function _injectStoreWsCSS(){
+  if($('#sw-css'))return; const s=document.createElement('style'); s.id='sw-css';
+  s.textContent=`
+  .sw-head{border:1px solid var(--border,#e5e7eb);border-radius:14px;background:var(--card,#fff);margin:0 0 16px;overflow:hidden}
+  .sw-id{display:flex;align-items:center;gap:12px;padding:14px 16px}
+  .sw-back{border:1px solid var(--border,#e5e7eb);background:var(--card,#fff);border-radius:9px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+  .sw-name{font-size:18px;font-weight:700;line-height:1.15}
+  .sw-sub{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:5px;margin-top:2px}
+  .sw-sub i{width:13px;height:13px}
+  .sw-badge{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:10px;line-height:1.15}
+  .sw-badge-sub{font-size:10.5px;font-weight:500;opacity:.8}
+  .sw-badge.b-ok{background:#dcfce7;color:#15803d}.sw-badge.b-cfg{background:#fef9c3;color:#a16207}
+  .sw-badge.b-stale{background:#ffedd5;color:#c2410c}.sw-badge.b-no{background:#fef2f2;color:#dc2626}
+  .sw-nav{display:flex;gap:2px;padding:0 8px;border-top:1px solid var(--border,#e5e7eb);overflow-x:auto}
+  .sw-tab{display:flex;align-items:center;gap:6px;background:none;border:none;border-bottom:2px solid transparent;padding:11px 12px;font-size:13px;font-weight:600;color:var(--mut);cursor:pointer;white-space:nowrap}
+  .sw-tab i{width:15px;height:15px}
+  .sw-tab.on{color:var(--fg,#111827);border-bottom-color:#7c3aed}`;
+  document.head.appendChild(s);
+}
+async function viewStore(){
+  const v=$('#view'); v.innerHTML=''; _injectStoreWsCSS();
+  const slug=_route.a1;
+  if(!slug){ v.appendChild(emptyState('store','Pick a store','Choose a store from the Stores grid or the Home picker to open its workspace.')); icons(); return; }
+  let section=STORE_SECTION_KEYS.has(_route.a2)?_route.a2:'creative';
+  if(_swGatedOut(STORE_SECTIONS.find(s=>s.k===section))) section='creative';   // gated section unreachable on prod
+  if(_route.tab==='store') setRouteArgs(slug,section);
+  // Identity — one cheap store-meta GET: config (name/account) + token_state (+ cached ready in step 6).
+  let data={config:null,token_state:{source:'none'}};
+  try{ const r=await fetch('/api/store-meta?slug='+encodeURIComponent(slug)); if(r.ok)data=await r.json(); }catch(e){}
+  const cfg=data.config||{};
+  const prod=_storeProduct(slug);
+  const name=cfg.store_name||(prod&&storeName(prod))||slug;
+  const ts={...(data.token_state||{source:'none'}), ready:cfg.ready, ready_at:cfg.ready_at, ready_detail:cfg.ready_detail};
+  const badge=_readyBadge(ts);
+  const acct=cfg.account_name||cfg.ad_account_id||null;
+  const head=el(`<div class="sw-head">
+    <div class="sw-id"><button class="sw-back" title="All stores"><i data-lucide="chevron-left"></i></button>
+      <div><div class="sw-name">${_esc(name)}</div>
+        <div class="sw-sub">${acct?('<i data-lucide="megaphone"></i>'+_esc(String(acct))):'<span>no ad account configured</span>'}</div></div>
+      <span class="sw-badge b-${badge.cls}" title="${_esc(badge.sub)}">${_esc(badge.txt)}<span class="sw-badge-sub">${_esc(badge.sub)}</span></span></div>
+    <nav class="sw-nav"></nav></div>`);
+  head.querySelector('.sw-back').addEventListener('click',()=>routeTo('stores'));
+  const nav=head.querySelector('.sw-nav');
+  STORE_SECTIONS.filter(s=>!_swGatedOut(s)).forEach(s=>{
+    const b=el(`<button class="sw-tab${s.k===section?' on':''}" data-sec="${s.k}"><i data-lucide="${s.icon}"></i>${_esc(s.label)}</button>`);
+    b.addEventListener('click',()=>{ setRouteArgs(slug,s.k); nav.querySelectorAll('.sw-tab').forEach(x=>x.classList.toggle('on',x.dataset.sec===s.k)); _mountSection(s.k,slug,name,data); });
+    nav.appendChild(b);
+  });
+  v.appendChild(head);
+  v.appendChild(el('<div id="swBody"></div>'));
+  _mountSection(section,slug,name,data);
+  icons();
+}
+function _mountSection(section,slug,name,data){
+  const box=$('#swBody'); if(!box)return; box.innerHTML=''; charts.length=0;
+  if(section==='meta'){ _mountMetaSetup(box,slug,name); return; }   // REAL — carries the prod credential lock
+  // Steps 2–5 replace these with the extracted, store-scoped section views.
+  const soon=(msg)=>{ box.appendChild(el(`<div class="panel" style="padding:26px 20px"><div class="ph-sub" style="font-size:12.5px"><b>${_esc(name)}</b> — ${_esc(msg)}</div></div>`)); icons(); };
+  ({creative:()=>soon('Creative (angles · hooks · personas) mounts here — migrating from Store View in step 3.'),
+    production:()=>soon('Production Tasks mount here — migrating from ClickUp Production Tasks in step 2.'),
+    liveads:()=>soon('Live Ads (per-store, with spend / ROAS / CPA) mounts here — step 4.'),
+    winners:()=>soon('Winners for this store — step 5.'),
+    kill:()=>soon('Kill List for this store — step 5.'),
+    brain:()=>soon('Brand Brain for this store — step 5.')}[section]||(()=>soon('Section')))();
 }
 
 /* ── Unified Launch Pipeline: ONE view, 3 sequential stages. Stage 1 & 3 REUSE the existing
@@ -1988,7 +2088,7 @@ function viewStores(){
   const grid=el('<div class="grid"></div>');
   DATA.products.forEach((s,i)=>{
     const ads=adsForStore(s.id),ang=DATA.angles.filter(a=>a.product_id===s.id),per=DATA.personas.filter(p=>p.product_id===s.id);
-    grid.appendChild(el(`<div class="scard">
+    grid.appendChild(el(`<div class="scard" data-store-slug="${_esc(_folderSlug(storeName(s)))}" style="cursor:pointer" title="Open ${_esc(storeName(s))} workspace">
       <div class="nm">${storeName(s)}<span class="pill">${ads.length} creatives</span></div>
       <div class="metrics">
         <div class="metric pipe"><div class="v">${inPipeline(ads)}</div><div class="k">Pipeline</div></div>
@@ -1998,6 +2098,8 @@ function viewStores(){
       <div class="tags">${ang.length?`<span class="tag"><i data-lucide="target"></i>${ang.length} angles</span>`:''}${per.length?`<span class="tag"><i data-lucide="user"></i>${per.length} personas</span>`:''}</div>
     </div>`));
   });
+  // Store card → its workspace (#store/<slug>/creative). The store-first entry point.
+  grid.addEventListener('click',e=>{const c=e.target.closest('[data-store-slug]'); if(c)routeTo('store',c.dataset.storeSlug,'creative');});
   v.appendChild(grid);icons();
 }
 
