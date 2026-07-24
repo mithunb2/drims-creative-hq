@@ -70,6 +70,9 @@ a{color:var(--indigo);text-decoration:none}
 .topbar .hdr-store{display:flex;align-items:center;gap:6px;margin-left:16px}
 .topbar .hdr-store i{width:15px;height:15px;color:var(--mut,#64748b);flex:none}
 .topbar .hdr-store select.sel{min-width:180px;padding:7px 11px;font-size:13px}
+.cu-due{white-space:nowrap}
+.cu-due-none{color:var(--mut,#94a3b8);font-style:italic;opacity:.7}
+.cu-due-over{color:#dc2626;font-weight:700}
 .topbar .logo{width:28px;height:28px;border-radius:8px}.topbar .logo [data-lucide]{width:16px;height:16px}
 .grow{flex:1}
 .badge{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;border:1px solid transparent}
@@ -2756,10 +2759,11 @@ async function _cuRender(){
     <div class="ph-sub" style="font-size:12px;margin-top:5px">${_esc(d.errors.join(' · '))}</div>
     <div class="ph-sub" style="font-size:12px;margin-top:5px">Reload the store to retry.</div></div>`:'';
   _cuTasks=tasks;
+  _cuFilters={status:'',assignee:'',video:'',from:'',to:''};   // fresh store → unfiltered
   // Drop selections that no longer exist (store switch / reload); keep valid ones.
   _cuSel=new Set([...(_cuSel||[])].filter(id=>tasks.some(t=>t.id===id&&t.drive_link)));
-  body.innerHTML=warn+_cuSelBar()+'<div class="panel" style="padding:0;overflow:hidden">'+tasks.map(_cuRow).join('')+'</div>';
-  _cuWire(body);
+  body.innerHTML=warn+_cuSelBar()+_cuFilterBar()+'<div class="panel" style="padding:0;overflow:hidden">'+_cuHeaderRow()+_cuVisible().map(_cuRow).join('')+'</div>';
+  _cuWire(body); _cuUpdateShown(body);
   icons();
 }
 
@@ -2767,7 +2771,53 @@ async function _cuRender(){
    Rows in ClickUp style: checkbox (Drive-link tasks only) · name/ID · assignee · status ·
    due date · Drive · expand arrow → full detail. "Publish to Meta" opens the launch config
    modal, which drives lib/launch/options.js — the SAME engine the server revalidates with. */
-const _cuFmtDue=ms=>{if(!ms)return '—';const d=new Date(+ms);return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});};
+// Due date, task-aware. No date → a muted italic dash (visually distinct from a real date).
+// Past due AND not in a terminal status → red "⚠ overdue" styling.
+function _cuFmtDue(t){
+  const ms=t&&t.due_date;
+  if(!ms) return '<span class="cu-due cu-due-none" title="no due date">—</span>';
+  const d=new Date(+ms),today=new Date();today.setHours(0,0,0,0);
+  const done=/(complete|done|winner|loser|scale|approved)/i.test(t.status||'');
+  const over=(+d<+today)&&!done;
+  const label=d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  return `<span class="cu-due${over?' cu-due-over':''}" title="due ${label}${over?' · overdue':''}">${over?'⚠ ':''}${label}</span>`;
+}
+// ── Production Tasks filters (client-side, over the loaded tasks): status · assignee · has-video · due range.
+let _cuFilters={status:'',assignee:'',video:'',from:'',to:''};
+function _cuVisible(){
+  const f=_cuFilters;
+  return (_cuTasks||[]).filter(t=>{
+    if(f.status && (t.status||'')!==f.status) return false;
+    if(f.assignee && !(t.assignees||[]).includes(f.assignee)) return false;
+    if(f.video==='with' && !t.drive_link) return false;
+    if(f.video==='without' && t.drive_link) return false;
+    if(f.from && (!t.due_date || +new Date(t.due_date) < +new Date(f.from))) return false;
+    if(f.to && (!t.due_date || +new Date(t.due_date) > +new Date(f.to+'T23:59:59'))) return false;
+    return true;
+  });
+}
+function _cuFilterBar(){
+  const statuses=[...new Set((_cuTasks||[]).map(t=>t.status).filter(Boolean))].sort();
+  const people=[...new Set((_cuTasks||[]).flatMap(t=>t.assignees||[]))].sort();
+  const opt=(v,cur,lbl)=>`<option value="${_esc(v)}"${v===cur?' selected':''}>${_esc(lbl||v||'')}</option>`;
+  return `<div class="cu-filters panel" style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+    <select class="cuFilter sel" data-f="status" style="min-width:140px"><option value="">All statuses</option>${statuses.map(s=>opt(s,_cuFilters.status)).join('')}</select>
+    <select class="cuFilter sel" data-f="assignee" style="min-width:150px"><option value="">All assignees</option>${people.map(p=>opt(p,_cuFilters.assignee)).join('')}</select>
+    <select class="cuFilter sel" data-f="video" style="min-width:120px">${opt('',_cuFilters.video,'Any video')}${opt('with',_cuFilters.video,'Has video')}${opt('without',_cuFilters.video,'No video')}</select>
+    <label class="ph-sub" style="font-size:11.5px;display:flex;align-items:center;gap:5px">Due <input class="cuFilter" data-f="from" type="date" value="${_esc(_cuFilters.from)}" style="padding:5px 7px"> – <input class="cuFilter" data-f="to" type="date" value="${_esc(_cuFilters.to)}" style="padding:5px 7px"></label>
+    <button class="cuFilter rev-btn" data-f="clear" style="font-size:12px">Clear</button>
+    <span class="ph-sub" style="font-size:11.5px;margin-left:auto" id="cuShown"></span></div>`;
+}
+function _cuHeaderRow(){
+  return `<div style="display:flex;gap:11px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(127,127,127,.18);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);font-weight:700">
+    <span style="width:16px"></span><span style="width:18px"></span>
+    <span style="flex:1;min-width:160px">Task</span>
+    <span style="min-width:110px">Assignee</span><span style="min-width:60px">Status</span>
+    <span style="min-width:52px">Due</span><span>Video</span></div>`;
+}
+function _cuUpdateShown(body){
+  const el2=(body||document).querySelector('#cuShown'); if(el2) el2.textContent=`showing ${_cuVisible().length} of ${(_cuTasks||[]).length}`;
+}
 
 function _cuSelBar(){
   const selectable=_cuTasks.filter(t=>t.drive_link);
@@ -2794,7 +2844,7 @@ function _cuRow(t){
         <span class="ph-sub" style="font-size:11px;margin-left:7px"><code>${_esc(t.id)}</code></span></div>
       <span class="ph-sub" style="font-size:12px;min-width:110px">${_esc(who)}</span>
       <span class="tag">${_esc(t.status||'—')}</span>
-      <span class="ph-sub" style="font-size:12px;min-width:52px" title="due date">${_cuFmtDue(t.due_date)}</span>
+      <span style="font-size:12px;min-width:52px">${_cuFmtDue(t)}</span>
       ${can?`<a class="rev-btn" href="${_esc(t.drive_link)}" target="_blank" rel="noopener" title="video in Drive"><i data-lucide="film"></i></a>`
            :'<span class="ph-sub" style="font-size:11px">no video</span>'}
     </div>
@@ -2827,12 +2877,19 @@ function _cuDetail(t){
 // element ever accumulates duplicate listeners no matter how often rows/bar are replaced.
 function _cuWire(body){
   body.onchange=e=>{
+    if(e.target.classList&&e.target.classList.contains('cuFilter')&&e.target.dataset.f&&e.target.dataset.f!=='clear'){
+      _cuFilters[e.target.dataset.f]=e.target.value; _cuRerow(body); return;
+    }
     if(e.target.classList&&e.target.classList.contains('cuChk')){
       const id=e.target.dataset.id; e.target.checked?_cuSel.add(id):_cuSel.delete(id); _cuRefreshBar(body);
     }else if(e.target.id==='cuSelAll'){
-      _cuSel=e.target.checked?new Set(_cuTasks.filter(t=>t.drive_link).map(t=>t.id)):new Set(); _cuRerow(body);
+      _cuSel=e.target.checked?new Set(_cuVisible().filter(t=>t.drive_link).map(t=>t.id)):new Set(); _cuRerow(body);
     }};
   body.onclick=e=>{
+    if(e.target.closest&&e.target.closest('.cuFilter[data-f="clear"]')){
+      _cuFilters={status:'',assignee:'',video:'',from:'',to:''};
+      const fb=body.querySelector('.cu-filters'); if(fb)fb.outerHTML=_cuFilterBar(); _cuRerow(body); return;
+    }
     const exp=e.target.closest&&e.target.closest('.cuExp');
     if(exp){const id=exp.dataset.id; _cuOpen.has(id)?_cuOpen.delete(id):_cuOpen.add(id); _cuRerow(body); return;}
     if(e.target.closest&&e.target.closest('#cuPublish'))_cuLaunchModal();
@@ -2840,8 +2897,8 @@ function _cuWire(body){
 }
 function _cuRerow(body){
   const wrap=body.querySelector('.panel[style*="padding:0"]');
-  if(wrap)wrap.innerHTML=_cuTasks.map(_cuRow).join('');
-  _cuRefreshBar(body); icons();
+  if(wrap)wrap.innerHTML=_cuHeaderRow()+_cuVisible().map(_cuRow).join('');
+  _cuRefreshBar(body); _cuUpdateShown(body); icons();
 }
 function _cuRefreshBar(body){
   const bar=body.querySelector('.panel[style*="sticky"]'); if(!bar)return;
