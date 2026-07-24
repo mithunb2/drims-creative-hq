@@ -537,14 +537,9 @@ table.tbl tbody tr:hover{background:var(--bg)}
   </header>
   <nav class="nav" id="nav">
     <button data-tab="overview" class="active"><i data-lucide="layout-dashboard"></i>Overview</button>
-    <button data-tab="stores"><i data-lucide="store"></i>Stores</button>
-    <button data-tab="deepdive"><i data-lucide="scan-search"></i>Store View</button>
-    <button data-tab="winners"><i data-lucide="award"></i>Winners</button>
-    <button data-tab="inspo"><i data-lucide="lightbulb"></i>Inspirations</button>
     <button data-tab="teamx"><i data-lucide="users"></i>Team</button>
+    <button data-tab="stores"><i data-lucide="store"></i>Stores</button>
     <button data-tab="pipeline"><i data-lucide="split"></i>Launch Pipeline</button>
-    <button data-tab="liveads"><i data-lucide="radio"></i>Live Ads</button>
-    <button data-tab="cutasks"><i data-lucide="clapperboard"></i>ClickUp Production Tasks</button>
   </nav>
   <main>
     <div class="stalebar" id="staleBar"><i data-lucide="alert-triangle"></i><span id="staleMsg"></span></div>
@@ -599,7 +594,9 @@ async function enterApp(session){
   if(_entered)return; _entered=true;
   $('#login').classList.add('hide');$('#app').classList.remove('hide');
   const email=session.user.email||'';$('#userEmail').textContent=email;$('#avatar').textContent=(email[0]||'?').toUpperCase();
-  await loadAll();{const _h=parseHash();routeTo(_h.tab,_h.a1,_h.a2);}
+  await loadAll();
+  await _initStores();
+  {const _h=parseHash();routeTo(_h.tab,_h.a1,_h.a2);}
 }
 
 /* data */
@@ -965,6 +962,8 @@ window.addEventListener('hashchange',()=>{ if(_hashLock){_hashLock=false;return;
 
 function routeTo(tab,a1,a2){
   if(tab==='split'){tab='pipeline';a1=a1||'1';} else if(tab==='launch'){tab='pipeline';a1=a1||'3';}  // old links → unified view
+  // Per-store tabs are now SUB-tabs inside a store space. An old top-level link lands on the picker.
+  if(['deepdive','winners','inspo','liveads','cutasks'].includes(tab)) tab='stores';
   _route={tab,a1:a1||'',a2:a2||''};
   if(tab==='pipeline') _pipeStage=Number(_route.a1)||_pipeStage||1;   // stage lives in arg1
   if(LAUNCH_UI_HIDDEN) document.querySelectorAll(LAUNCH_HIDDEN_TABS.map(t=>`#nav [data-tab="${t}"]`).join(',')).forEach(b=>{b.style.display='none';});
@@ -978,10 +977,86 @@ function routeTo(tab,a1,a2){
     icons();return;
   }
   writeHash(tab,_route.a1,_route.a2);
-  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  const navActive=(tab==='store'?'stores':tab);   // inside a store space, keep Stores lit
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===navActive));
   charts.length=0;
-  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,teamx:viewTeamUnified,pipeline:viewPipeline,liveads:viewLiveAds,cutasks:viewCUTasks}[tab]||viewOverview)();
+  ({overview:viewOverview,stores:viewStores,deepdive:viewDeepDive,winners:viewWinners,inspo:viewInspo,team:viewTeam,workload:viewWorkload,performance:viewPerformance,teamx:viewTeamUnified,pipeline:viewPipeline,liveads:viewLiveAds,cutasks:viewCUTasks,store:viewStore}[tab]||viewOverview)();
   icons();
+}
+
+/* ══ STORE SPACE — store-first IA (#store/<slug>/<section>). Pick a store → its sub-tabs appear; the
+   store stays fixed while you switch sub-tabs. Sections are REAL from their first commit (no
+   placeholders — honest empty states). The sub-tab bar grows as sections land (Phase 1, one at a
+   time). Mobile: the sub-tab bar is a horizontal scroll strip; the store header stacks + stays on
+   screen. Data reads go through _storeCache so leaving a store and returning does NOT refetch. ══ */
+let _storeCache=null;   // per-store SWR cache (lib/store_cache.js) — proven in store-cache.test.js
+let gStores=[];         // [{slug,name}] store universe (instant products → upgraded to the 18)
+const _productBySlug=slug=>DATA.products.find(p=>_folderSlug(storeName(p))===slug)||null;
+const _storeNameBySlug=slug=>{const s=gStores.find(x=>x.slug===slug);const p=_productBySlug(slug);return (s&&s.name)||(p&&storeName(p))||slug;};
+// Sub-tabs land one per Phase-1 step. gate:'launch' → hidden on the prod launch host.
+const STORE_SUBTABS=[
+  {k:'storeview',label:'Store View',icon:'scan-search',gate:null,mount:(box,slug)=>_secStoreView(box,slug)},
+  {k:'meta',     label:'Meta Setup',icon:'settings-2', gate:null,mount:(box,slug)=>_mountMetaSetup(box,slug,_storeNameBySlug(slug))},
+];
+const _subById=k=>STORE_SUBTABS.find(s=>s.k===k);
+const _subGatedOut=s=>s&&s.gate==='launch'&&LAUNCH_UI_HIDDEN;
+async function _initStores(){
+  if(!_storeCache){ try{ const m=await import('/lib/store_cache.js'); _storeCache=m.createStoreCache(); }catch(e){} }
+  if(DATA.products.length) gStores=DATA.products.map(p=>({slug:_folderSlug(storeName(p)),name:storeName(p)}));   // instant, from cache
+  _cuApi('action=stores').then(d=>{ if(d&&d.ok&&Array.isArray(d.stores)&&d.stores.length) gStores=d.stores.map(s=>({slug:_folderSlug(s.name),name:s.name})); }).catch(()=>{});   // upgrade to 18, background
+}
+// Store identity for the header — cached per store (no refetch on return).
+function _storeMeta(slug){
+  const fetcher=()=>fetch('/api/store-meta?slug='+encodeURIComponent(slug)).then(r=>r.ok?r.json():{}).catch(()=>({}));
+  return _storeCache?_storeCache.get(slug,'meta',fetcher):fetcher();
+}
+async function viewStore(){
+  _injectStoreCSS();
+  const slug=_route.a1;
+  if(!slug){ routeTo('stores'); return; }
+  let section=_subById(_route.a2)?_route.a2:'storeview';
+  if(_subGatedOut(_subById(section))) section='storeview';
+  if(_route.tab==='store') setRouteArgs(slug,section);
+  const name=_storeNameBySlug(slug);
+  $('#view').innerHTML=`<div class="ss-head">
+    <div class="ss-id"><button class="ss-back"><i data-lucide="chevron-left"></i><span>Stores</span></button>
+      <div class="ss-name">${_esc(name)}</div><span class="ss-badge" id="ssBadge">…</span></div>
+    <nav class="ss-nav" id="ssNav"></nav></div><div id="ssBody"></div>`;
+  $('.ss-back').addEventListener('click',()=>routeTo('stores'));
+  const nav=$('#ssNav');
+  STORE_SUBTABS.filter(s=>!_subGatedOut(s)).forEach(s=>{
+    const b=el(`<button class="ss-tab${s.k===section?' on':''}" data-sec="${s.k}"><i data-lucide="${s.icon}"></i>${_esc(s.label)}</button>`);
+    b.addEventListener('click',()=>{ setRouteArgs(slug,s.k); nav.querySelectorAll('.ss-tab').forEach(x=>x.classList.toggle('on',x.dataset.sec===s.k)); _mountSub(s.k,slug); });
+    nav.appendChild(b);
+  });
+  icons();
+  _storeMeta(slug).then(d=>{ const b=$('#ssBadge'); if(!b)return; const st=(d&&d.token_state)||{source:'none'};
+    const m={own:['ok','token set'],inherited:['ok','inherited token']}[st.source]||['no','not set up'];
+    b.className='ss-badge b-'+m[0]; b.textContent=m[1]; });
+  _mountSub(section,slug);
+}
+function _mountSub(k,slug){ const box=$('#ssBody'); if(!box)return; box.innerHTML=''; charts.length=0; (_subById(k)||STORE_SUBTABS[0]).mount(box,slug); icons(); }
+function _secStoreView(box,slug){
+  const p=_productBySlug(slug);
+  if(!p){ box.appendChild(emptyState('inbox','Nothing for '+_storeNameBySlug(slug)+' yet','No synced creatives for this store — angles, hooks and personas appear after the next 10-min sync.')); return; }
+  selectedStore=p.id;
+  box.innerHTML='<div style="margin:2px 2px 10px"><span class="pill" id="ddTotal"></span></div><div id="ddBody"></div>';
+  renderDeepDive(true);   // skip Meta Setup — it's its own sub-tab
+}
+function _injectStoreCSS(){
+  if($('#ss-css'))return; const s=document.createElement('style'); s.id='ss-css';
+  s.textContent=`
+  .ss-head{border:1px solid var(--line,#e5e7eb);border-radius:14px;background:var(--card,#fff);margin:0 0 16px;overflow:hidden}
+  .ss-id{display:flex;align-items:center;gap:12px;padding:12px 14px;flex-wrap:wrap}
+  .ss-back{display:flex;align-items:center;gap:3px;border:1px solid var(--line,#e5e7eb);background:var(--card,#fff);border-radius:9px;padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--mut,#64748b);flex:none}
+  .ss-name{font-size:18px;font-weight:700;line-height:1.15}
+  .ss-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;margin-left:auto}
+  .ss-badge.b-ok{background:#dcfce7;color:#15803d}.ss-badge.b-no{background:#fef2f2;color:#dc2626}
+  .ss-nav{display:flex;gap:2px;padding:0 8px;border-top:1px solid var(--line,#e5e7eb);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .ss-tab{display:flex;align-items:center;gap:6px;background:none;border:none;border-bottom:2px solid transparent;padding:11px 13px;font-size:13px;font-weight:600;color:var(--mut,#64748b);cursor:pointer;white-space:nowrap;flex:none}
+  .ss-tab i{width:15px;height:15px;flex:none}.ss-tab.on{color:var(--ink,#111827);border-bottom-color:#7c3aed}
+  @media(max-width:600px){.ss-name{font-size:16px}.ss-id{padding:10px 12px}.ss-badge{margin-left:0;order:3}}`;
+  document.head.appendChild(s);
 }
 
 /* ── Unified Launch Pipeline: ONE view, 3 sequential stages. Stage 1 & 3 REUSE the existing
@@ -1988,7 +2063,7 @@ function viewStores(){
   const grid=el('<div class="grid"></div>');
   DATA.products.forEach((s,i)=>{
     const ads=adsForStore(s.id),ang=DATA.angles.filter(a=>a.product_id===s.id),per=DATA.personas.filter(p=>p.product_id===s.id);
-    grid.appendChild(el(`<div class="scard">
+    grid.appendChild(el(`<div class="scard" data-store-slug="${_esc(_folderSlug(storeName(s)))}" style="cursor:pointer" title="Open ${_esc(storeName(s))}">
       <div class="nm">${storeName(s)}<span class="pill">${ads.length} creatives</span></div>
       <div class="metrics">
         <div class="metric pipe"><div class="v">${inPipeline(ads)}</div><div class="k">Pipeline</div></div>
@@ -1998,6 +2073,7 @@ function viewStores(){
       <div class="tags">${ang.length?`<span class="tag"><i data-lucide="target"></i>${ang.length} angles</span>`:''}${per.length?`<span class="tag"><i data-lucide="user"></i>${per.length} personas</span>`:''}</div>
     </div>`));
   });
+  grid.addEventListener('click',e=>{const c=e.target.closest('[data-store-slug]'); if(c)routeTo('store',c.dataset.storeSlug,'storeview');});   // → store space
   v.appendChild(grid);icons();
 }
 
@@ -2029,12 +2105,12 @@ function viewDeepDive(){
   $('#storeSel').addEventListener('change',e=>{selectedStore=e.target.value;_ddSync();renderDeepDive();});
   renderDeepDive();
 }
-function renderDeepDive(){
+function renderDeepDive(skipMeta){
   charts.length=0;
   const ads=adsForStore(selectedStore),body=$('#ddBody');body.innerHTML='';
-  $('#ddTotal').textContent=`${ads.length} creatives`;
+  if($('#ddTotal'))$('#ddTotal').textContent=`${ads.length} creatives`;
   const _ddStore=DATA.products.find(p=>p.id===selectedStore)||{};
-  const _ms=el('<div id="metaSetup"></div>');body.appendChild(_ms);_mountMetaSetup(_ms,selectedStore,storeName(_ddStore));
+  if(!skipMeta){const _ms=el('<div id="metaSetup"></div>');body.appendChild(_ms);_mountMetaSetup(_ms,selectedStore,storeName(_ddStore));}   // Meta Setup is its own sub-tab in the store space
   if(!ads.length){body.appendChild(emptyState('inbox','No creatives in this store yet','As tasks land in this store\'s ClickUp lists, they appear after the next 10-min sync.'));icons();return;}
   const c=s=>ads.filter(a=>stageOf(a)===s).length,wins=ads.filter(isWinner),losers=ads.filter(isLoser);
   body.appendChild(el(`<div class="kpis">
