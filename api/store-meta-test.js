@@ -6,6 +6,7 @@
 // page usable (CREATE_CONTENT+ADVERTISE) + BM-owned?
 import crypto from 'node:crypto';
 import { resolveMetaNames, cacheMetaNames } from '../lib/launch/meta_names.js';
+import { resolveStoreSecret } from '../lib/launch/secrets.js';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const G = 'https://graph.facebook.com/v21.0';
@@ -38,10 +39,12 @@ export default async function handler(req, res) {
 
     const cfg = (await svcGet(`store_meta_config?store_slug=eq.${encodeURIComponent(slug)}&select=*`) || [])[0];
     if (!cfg) return res.status(404).json({ error: 'no Meta config for this store — save it first' });
-    const sec = (await svcGet(`store_meta_secrets?store_slug=eq.${encodeURIComponent(slug)}&select=system_user_token,app_secret`) || [])[0];
-    if (!sec || !sec.system_user_token || !sec.app_secret) return res.status(400).json({ error: 'no token set for this store — enter it first' });
-
-    const token = sec.system_user_token, secret = sec.app_secret;
+    // Resolve credentials the SAME way the launcher does: own token or inherited BM token; own
+    // app_secret override or the global META_APP_SECRET. Test verdict == launch reality.
+    const { token, secret, token_source, secret_source, inherited_from } =
+      await resolveStoreSecret(SUPABASE_URL, SERVICE, slug);
+    if (!token) return res.status(400).json({ error: 'no token for this store — enter one, or reuse the BM token' });
+    if (!secret) return res.status(400).json({ error: 'no app secret available — set META_APP_SECRET in the env or enter a per-store override' });
     const proof = crypto.createHmac('sha256', secret).update(token).digest('hex');
     const out = {};
 
@@ -89,7 +92,9 @@ export default async function handler(req, res) {
     const names = await resolveMetaNames(cfg, token, secret);
     await cacheMetaNames(SUPABASE_URL, SERVICE, slug, names);
 
-    return res.status(200).json({ slug, checks: out, names });   // NB: token never included in the response
+    // creds: which token/secret this test used (source only — never the values themselves).
+    const creds = { token_source, secret_source, inherited_from };
+    return res.status(200).json({ slug, checks: out, names, creds });   // NB: token never included in the response
   } catch (err) {
     console.error('[api/store-meta-test] error:', err);
     return res.status(500).json({ error: 'test failed', detail: String((err && err.message) || err) });

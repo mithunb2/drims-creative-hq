@@ -25,16 +25,32 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const slug = (req.query && req.query.slug) ? String(req.query.slug) : '';
+      const q = req.query || {};
+      // BM-donor lookup: does the given Business Manager already have a token saved on some OTHER
+      // store? Drives the "reuse the BM token" checkbox live as a BM id is typed (pre-save). The
+      // token itself is never touched — only whether a donor exists + which store it is.
+      if (q.bm) {
+        const { findBmTokenDonor } = await import('../lib/launch/secrets.js');
+        const donor = await findBmTokenDonor(SUPABASE_URL, SERVICE, String(q.bm), String(q.exclude || ''));
+        let donor_name = null;
+        if (donor) {
+          const drow = (await svc(`store_meta_config?store_slug=eq.${encodeURIComponent(donor.store_slug)}&select=store_name`) || [])[0];
+          donor_name = (drow && drow.store_name) || donor.store_slug;
+        }
+        return res.status(200).json({ bm_token_available: !!donor, donor_slug: donor ? donor.store_slug : null, donor_name });
+      }
+      const slug = q.slug ? String(q.slug) : '';
       if (!slug) {
         const configs = await svc(`store_meta_config?select=*&order=store_slug`);
         return res.status(200).json({ configs: configs || [] });
       }
       const cfg = (await svc(`store_meta_config?store_slug=eq.${encodeURIComponent(slug)}&select=*`) || [])[0] || null;
-      // token_set: does a secret row with a non-null token exist? (the token value is NEVER read out)
-      const sec = await svc(`store_meta_secrets?store_slug=eq.${encodeURIComponent(slug)}&select=store_slug,system_user_token`);
-      const token_set = !!(sec && sec[0] && sec[0].system_user_token);
-      return res.status(200).json({ config: cfg, token_set });
+      // Resolved token state (own token / inherited BM token / genuinely none) + secret source.
+      // The token value is NEVER read out — tokenState() strips it server-side.
+      const { tokenState } = await import('../lib/launch/secrets.js');
+      const token_state = await tokenState(SUPABASE_URL, SERVICE, slug);
+      const token_set = token_state.source !== 'none';   // legacy field: is a token effectively available?
+      return res.status(200).json({ config: cfg, token_set, token_state });
     }
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -50,10 +66,11 @@ export default async function handler(req, res) {
       // Test-connection refresh; a failed read never blanks the id display.
       try {
         const { resolveMetaNames, cacheMetaNames } = await import('../lib/launch/meta_names.js');
-        const sec = (await svc(`store_meta_secrets?store_slug=eq.${encodeURIComponent(slug)}&select=system_user_token,app_secret`) || [])[0];
-        if (sec && sec.system_user_token && sec.app_secret) {
+        const { resolveStoreSecret } = await import('../lib/launch/secrets.js');
+        const { token, secret } = await resolveStoreSecret(SUPABASE_URL, SERVICE, slug);
+        if (token && secret) {
           const cfg = (await svc(`store_meta_config?store_slug=eq.${encodeURIComponent(slug)}&select=*`) || [])[0];
-          if (cfg) await cacheMetaNames(SUPABASE_URL, SERVICE, slug, await resolveMetaNames(cfg, sec.system_user_token, sec.app_secret));
+          if (cfg) await cacheMetaNames(SUPABASE_URL, SERVICE, slug, await resolveMetaNames(cfg, token, secret));
         }
       } catch { /* name refresh is never allowed to fail a save */ }
       return res.status(200).json({ status: 'saved', slug });

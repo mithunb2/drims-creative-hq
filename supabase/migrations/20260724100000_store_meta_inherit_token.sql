@@ -1,0 +1,12 @@
+-- ADDITIVE ONLY. Opt-in flag: this store reuses a system-user token already saved on ANOTHER
+-- store in the SAME Business Manager (a system-user token is BM-scoped, so reuse is safe within
+-- one BM and forbidden across BMs). When true AND this row has no own system_user_token, the
+-- server resolves the token from a sibling store in the same BM at read time — the token is NEVER
+-- copied into this row (rotating it on the owning store propagates automatically).
+--
+-- Pairs with the app_secret change: app_secret is now an OPTIONAL per-store override; when null the
+-- server falls back to the global META_APP_SECRET env var (ONE Meta app, id 1327252202888713).
+--
+-- Paste into the Supabase SQL Editor and Run. Idempotent. Code is fail-soft without it (the column
+-- simply reads as false → no inheritance), so applying it is what turns the checkbox on.
+alter table store_meta_secrets add column if not exists inherit_bm_token boolean not null default false;

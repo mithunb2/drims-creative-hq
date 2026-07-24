@@ -16,6 +16,7 @@ import { resolveOptions, buildPlan, applyEdits, LaunchOptionError } from '../lib
 import { extractAdCopy, holdsQuery, holdsByTaskId, parseDocLink, fetchDocText } from '../lib/launch/ad_copy.js';
 import { norm } from '../lib/launch/registry.js';
 import { planInputsHash, signPreviewToken } from '../lib/launch/plan_hash.js';
+import { resolveStoreSecret } from '../lib/launch/secrets.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
@@ -108,8 +109,8 @@ export default async function handler(req, res) {
 
     const cfg = (await svc(`store_meta_config?store_slug=eq.${encodeURIComponent(slug)}&select=*`) || [])[0];
     if (!cfg) return res.status(404).json({ ok: false, reason: `no Meta config for store '${slug}'` });
-    const sec = (await svc(`store_meta_secrets?store_slug=eq.${encodeURIComponent(slug)}&select=system_user_token,app_secret`) || [])[0];
-    if (!sec || !sec.system_user_token || !sec.app_secret) return res.status(400).json({ ok: false, reason: `no token stored for '${slug}'` });
+    const cred = await resolveStoreSecret(SUPABASE_URL, SERVICE(), slug);
+    if (!cred.token || !cred.secret) return res.status(400).json({ ok: false, reason: `no token/app-secret resolvable for '${slug}' — set one in Meta Setup (own or inherited BM token)` });
 
     const fetched = await fetchTasks(taskIds);
     const selected = taskIds.map((id) => fetched.get(id));
@@ -128,7 +129,7 @@ export default async function handler(req, res) {
       if (body.edits) plan = applyEdits(plan, body.edits);
     } catch (e) { if (e instanceof LaunchOptionError) return res.status(400).json({ ok: false, reason: e.message }); throw e; }
 
-    const token = sec.system_user_token, proof = crypto.createHmac('sha256', sec.app_secret).update(sec.system_user_token).digest('hex');
+    const token = cred.token, proof = crypto.createHmac('sha256', cred.secret).update(cred.token).digest('hex');
     const pageId = plan.page_id;
     const ads = plan.adsets.flatMap((a) => a.ads);
 

@@ -1506,17 +1506,28 @@ function _injectMetaSetupCSS(){
   .ms-pgwarn{grid-column:1/-1;font-size:12px}.ms-ok{color:#15803d}`;
   document.head.appendChild(s);
 }
+// Badge text/class from the RESOLVED token state (own token / inherited BM token / none).
+function _tokBadge(st){
+  if(!st) return {cls:'no',txt:'no token'};
+  if(st.source==='own') return {cls:'ok',txt:'token set ✓'};
+  if(st.source==='inherited') return {cls:'ok',txt:'inherited BM token ✓'+(st.inherited_from?(' · from '+st.inherited_from):'')};
+  return {cls:'no',txt:'no token'};
+}
 async function _mountMetaSetup(wrap,slug,storeName){
   _injectMetaSetupCSS(); wrap.innerHTML='<div class="ms-card" style="padding:12px 14px;color:var(--mut)">Loading Meta Setup…</div>';
-  let data={config:null,token_set:false};
+  let data={config:null,token_set:false,token_state:null};
   try{ const r=await fetch('/api/store-meta?slug='+encodeURIComponent(slug)); if(r.ok) data=await r.json(); }catch(e){}
   const c=data.config||{};
+  let tState=data.token_state||{source:(data.token_set?'own':'none'),bm_token_available:false,inherit_opted_in:false,inherited_from:null};
   // Persisted store_name is what the launcher's assert_store_match compares against the ClickUp
   // folder — so always save it (fall back to the passed display name for a brand-new config).
   const displayName=(c.store_name||storeName||slug);
   const F=[['business_manager_id','Business Manager ID'],['ad_account_id','Ad Account ID (act_…)'],['page_id','Page ID (BM-owned)'],['pixel_id','Pixel ID'],['custom_conversion_id','Custom Conversion ID'],['ig_actor_id','Instagram Actor ID'],['default_landing','Default Landing URL'],['currency','Currency']];
   wrap.innerHTML='';
-  const card=el(`<details class="ms-card"><summary><i data-lucide="settings-2"></i> Meta Setup — <b>${_esc(slug)}</b><span class="ms-tok ${data.token_set?'ok':'no'}">${data.token_set?'token set ✓':'no token'}</span></summary></details>`);
+  const _b0=_tokBadge(tState);
+  const card=el(`<details class="ms-card"><summary><i data-lucide="settings-2"></i> Meta Setup — <b>${_esc(slug)}</b><span class="ms-tok ${_b0.cls}">${_esc(_b0.txt)}</span></summary></details>`);
+  const badgeEl=()=>card.querySelector('.ms-tok');
+  const setBadge=(st)=>{const b=_tokBadge(st);const e=badgeEl();if(e){e.className='ms-tok '+b.cls;e.textContent=b.txt;}};
   const form=el('<div class="ms-form"></div>');
   const connect=el('<div class="ms-connect"><button class="ms-btn ms-fb"><i data-lucide="facebook"></i> Connect Facebook (autofill)</button><span class="ms-status ms-cstat">— or fill the fields manually below (fallback)</span></div>');
   const dpanel=el('<div class="ms-disc"></div>');
@@ -1533,18 +1544,54 @@ async function _mountMetaSetup(wrap,slug,storeName){
   const testBtn=el('<button class="ms-btn ms-test"><i data-lucide="plug-zap"></i> Test connection</button>'),testRes=el('<div class="ms-testres"></div>');
   testBtn.addEventListener('click',async()=>{
     testRes.innerHTML='<span class="ms-status">Testing… (read-only — no launch, no spend)</span>';
-    try{ const r=await fetch('/api/store-meta-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug})}); const d=await r.json().catch(()=>({})); testRes.innerHTML=r.ok?_renderChecks(d.checks):('<span class="ms-warn">'+_esc(d.error||('HTTP '+r.status))+'</span>'); icons(); }catch(e){ testRes.innerHTML='<span class="ms-warn">Network error</span>'; }
+    try{ const r=await fetch('/api/store-meta-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug})}); const d=await r.json().catch(()=>({})); testRes.innerHTML=r.ok?(_renderChecks(d.checks)+_renderCreds(d.creds)):('<span class="ms-warn">'+_esc(d.error||('HTTP '+r.status))+'</span>'); icons(); }catch(e){ testRes.innerHTML='<span class="ms-warn">Network error</span>'; }
   });
   cfgAct.appendChild(saveCfg);cfgAct.appendChild(testBtn);cfgAct.appendChild(cfgSt);form.appendChild(cfgAct);form.appendChild(testRes);
-  const tok=el(`<div class="ms-token"><label class="ms-row"><span>System-user token (write-only)</span><input type="password" id="msTok" placeholder="paste token — never shown back"></label><label class="ms-row"><span>App secret</span><input type="password" id="msSec" placeholder="paste app secret"></label></div>`);
+  // Reuse-BM-token row: shown only when this store's Business Manager already has a token saved on
+  // ANOTHER store. Checking it makes the store inherit that token (resolved server-side at read time
+  // — nothing is pasted or copied), so a system-user token is entered once per BM, not once per store.
+  const inheritRow=el(`<label class="ms-row ms-inherit" style="grid-column:1/-1;flex-direction:row;align-items:center;gap:8px;display:none"><input type="checkbox" class="msInherit" style="width:auto"><span>Use the token already saved for this Business Manager<span class="msInheritFrom ms-status"></span></span></label>`);
+  form.appendChild(inheritRow);
+  const tok=el(`<div class="ms-token"><label class="ms-row"><span>System-user token (write-only)</span><input type="password" class="msTok" placeholder="paste token — never shown back"></label><label class="ms-row"><span>App secret (optional — uses the default app unless overridden)</span><input type="password" class="msSec" placeholder="leave blank to use the default app secret"></label></div>`);
   form.appendChild(tok);
   const tokAct=el('<div class="ms-actions"></div>');
   const saveTok=el('<button class="ms-btn ms-btn2">Save token</button>'),tokSt=el('<span class="ms-status"></span>');
+  // Local element handles (valid before the form is inserted into the DOM).
+  const inChk=inheritRow.querySelector('.msInherit'), inFrom=inheritRow.querySelector('.msInheritFrom');
+  const tokInput=tok.querySelector('.msTok'), secInput=tok.querySelector('.msSec');
+  const syncTokInputs=()=>{ const on=inChk.checked; [tokInput,secInput].forEach(i=>{i.disabled=on;i.style.opacity=on?0.45:1;}); };
+  // Reflect a donor for the CURRENT BM id: show/hide the reuse row + preset its checked state.
+  const applyDonor=(available,fromLabel,optedIn)=>{
+    inheritRow.style.display=available?'flex':'none';
+    if(!available){ inChk.checked=false; }
+    else { inFrom.textContent=fromLabel?(' — '+fromLabel):''; if(optedIn!==undefined) inChk.checked=!!optedIn; }
+    syncTokInputs();
+  };
+  applyDonor(!!tState.bm_token_available, tState.bm_donor_slug||'', tState.inherit_opted_in);
+  inChk.addEventListener('change',syncTokInputs);
+  // Live re-check as the BM id is edited (pre-save): does THAT BM already have a saved token?
+  const bmInput=form.querySelector('input[data-k="business_manager_id"]');
+  if(bmInput) bmInput.addEventListener('change',async()=>{
+    const bm=bmInput.value.trim(); if(!bm){applyDonor(false);return;}
+    try{ const r=await fetch('/api/store-meta?bm='+encodeURIComponent(bm)+'&exclude='+encodeURIComponent(slug)); const d=await r.json().catch(()=>({}));
+      applyDonor(!!d.bm_token_available, d.donor_name||d.donor_slug||''); }catch(e){}
+  });
   saveTok.addEventListener('click',async()=>{
-    const t=$('#msTok').value.trim(),s=$('#msSec').value.trim();
-    if(!t||!s){tokSt.textContent='Enter token + app secret';return;}
+    const inherit=inChk.checked;
+    let payload;
+    if(inherit){ payload={slug,inherit_bm_token:true}; }
+    else{
+      const t=tokInput.value.trim(),s=secInput.value.trim();
+      if(!t){tokSt.textContent='Enter a token (or tick "use the BM token")';return;}
+      payload={slug,system_user_token:t,app_secret:s};   // s may be '' → server falls back to the default app secret
+    }
     tokSt.textContent='Saving…';
-    try{ const r=await fetch('/api/store-meta-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug,system_user_token:t,app_secret:s})}); const d=await r.json().catch(()=>({})); tokSt.textContent=r.ok?'Token set ✓ (refresh to see badge)':(d.error||'Error'); $('#msTok').value='';$('#msSec').value=''; }catch(e){tokSt.textContent='Network error';}
+    try{ const r=await fetch('/api/store-meta-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const d=await r.json().catch(()=>({}));
+      if(r.ok){ tState=inherit?{source:'inherited',inherited_from:d.inherited_from,bm_token_available:true,inherit_opted_in:true,bm_donor_slug:d.inherited_from}
+                              :{source:'own',secret_source:d.app_secret_source,bm_token_available:tState.bm_token_available,inherit_opted_in:false};
+        setBadge(tState); syncTokInputs(); tokSt.textContent=inherit?('Reusing '+(d.inherited_from||'BM')+' token ✓'):('Token set ✓'+(d.app_secret_source==='default'?' (default app secret)':''));
+      } else { tokSt.textContent=d.error||'Error'; }
+      tokInput.value='';secInput.value=''; }catch(e){tokSt.textContent='Network error';}
   });
   tokAct.appendChild(saveTok);tokAct.appendChild(tokSt);form.appendChild(tokAct);
   card.appendChild(form); wrap.appendChild(card); icons();
@@ -1600,6 +1647,13 @@ function _renderDiscovery(panel,form,bms){
   });
 }
 
+// Footnote under the check rows: which credentials this test actually used (source only).
+function _renderCreds(cr){
+  if(!cr) return '';
+  const tok=cr.token_source==='inherited'?('inherited BM token'+(cr.inherited_from?(' from '+_esc(cr.inherited_from)):'')):(cr.token_source==='own'?'own token':'no token');
+  const sec=cr.secret_source==='default'?'default app secret':(cr.secret_source==='own'?'own app secret override':'no app secret');
+  return `<div class="ms-status" style="font-size:11px;margin-top:2px">tested with: ${tok} · ${sec}</div>`;
+}
 function _renderChecks(c){
   if(!c) return '<span class="ms-warn">no result</span>';
   const row=(label,ok,detail)=>`<div class="ms-chk ${ok?'ok':'no'}"><i data-lucide="${ok?'check-circle-2':'x-circle'}"></i><b>${label}</b><span>${_esc(detail||'')}</span></div>`;

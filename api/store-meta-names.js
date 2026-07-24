@@ -5,6 +5,7 @@
 // server-side). Names are cached onto store_meta_config (best-effort; tolerates the name
 // columns not existing yet).
 import { resolveMetaNames, cacheMetaNames } from '../lib/launch/meta_names.js';
+import { resolveStoreSecret } from '../lib/launch/secrets.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
@@ -48,9 +49,9 @@ export default async function handler(req, res) {
     let names = { bm_name: cfg.bm_name || null, account_name: cfg.account_name || null, page_name: cfg.page_name || null };
     const missing = !(names.bm_name && names.account_name && names.page_name);
     if (missing || req.query.refresh === '1') {
-      const sec = (await svc(`store_meta_secrets?store_slug=eq.${encodeURIComponent(slug)}&select=system_user_token,app_secret`) || [])[0];
-      if (sec && sec.system_user_token && sec.app_secret) {
-        const live = await resolveMetaNames(cfg, sec.system_user_token, sec.app_secret);
+      const { token, secret } = await resolveStoreSecret(SUPABASE_URL, SERVICE(), slug);
+      if (token && secret) {
+        const live = await resolveMetaNames(cfg, token, secret);
         names = { bm_name: live.bm_name || names.bm_name, account_name: live.account_name || names.account_name,
           page_name: live.page_name || names.page_name };
         await cacheMetaNames(SUPABASE_URL, SERVICE(), slug, names);   // best-effort

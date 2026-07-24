@@ -33,6 +33,7 @@ import { resolveOptions, buildPlan, applyEdits, totalDailySpend, planSummary, La
 import { extractAdCopy, holdsQuery, holdsByTaskId, parseDocLink, fetchDocText } from '../lib/launch/ad_copy.js';
 import { norm } from '../lib/launch/registry.js';
 import { planInputsHash, verifyPreviewToken } from '../lib/launch/plan_hash.js';
+import { resolveStoreSecret } from '../lib/launch/secrets.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zeaztlcopkvlfziwrmto.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
@@ -234,14 +235,14 @@ export default async function handler(req, res) {
     // ── ASL gate on the COMPUTED total (ABO = budget × ad-set count). ──
     const total = totalDailySpend(plan);
     if (!(total > 0)) return res.status(400).json({ ok: false, reason: 'daily budget must be > 0' });
-    const sec = (await svc(`store_meta_secrets?store_slug=eq.${encodeURIComponent(slug)}&select=system_user_token,app_secret`) || [])[0];
-    if (!sec || !sec.system_user_token || !sec.app_secret) {
-      return res.status(400).json({ ok: false, reason: `no system-user token stored for '${slug}' — enter it in Meta Setup` });
+    const cred = await resolveStoreSecret(SUPABASE_URL, SERVICE(), slug);
+    if (!cred.token || !cred.secret) {
+      return res.status(400).json({ ok: false, reason: `no launch credentials for '${slug}' — set a token (or reuse the BM token) in Meta Setup` });
     }
-    const proof = crypto.createHmac('sha256', sec.app_secret).update(sec.system_user_token).digest('hex');
+    const proof = crypto.createHmac('sha256', cred.secret).update(cred.token).digest('hex');
     const aslUrl = new URL(`${GRAPH}/${plan.account_id}`);
     aslUrl.searchParams.set('fields', 'spend_cap,amount_spent,currency');
-    aslUrl.searchParams.set('access_token', sec.system_user_token);
+    aslUrl.searchParams.set('access_token', cred.token);
     aslUrl.searchParams.set('appsecret_proof', proof);
     const aslR = await fetch(aslUrl); const asl = await aslR.json().catch(() => ({}));
     if (!aslR.ok) {
