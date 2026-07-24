@@ -530,6 +530,7 @@ table.tbl tbody tr:hover{background:var(--bg)}
 <section id="app" class="hide">
   <header class="topbar">
     <div class="brand"><div class="logo"><i data-lucide="command"></i></div><span>Creative HQ</span></div>
+    <select class="sel" id="navStore" title="Jump straight into a store's space" style="max-width:200px;margin-left:14px"><option value="">Jump to store…</option></select>
     <div class="grow"></div>
     <span class="badge dead" id="syncBadge"><span class="dot"></span><span id="syncText">checking</span></span>
     <div class="who"><span class="av" id="avatar">?</span><span class="em" id="userEmail"></span>
@@ -596,6 +597,7 @@ async function enterApp(session){
   const email=session.user.email||'';$('#userEmail').textContent=email;$('#avatar').textContent=(email[0]||'?').toUpperCase();
   await loadAll();
   await _initStores();
+  { const ns=$('#navStore'); if(ns) ns.addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(v) routeTo('store',v,'storeview'); }); }   // jump-to navigator
   {const _h=parseHash();routeTo(_h.tab,_h.a1,_h.a2);}
 }
 
@@ -1004,8 +1006,16 @@ const _subById=k=>STORE_SUBTABS.find(s=>s.k===k);
 const _subGatedOut=s=>s&&s.gate==='launch'&&LAUNCH_UI_HIDDEN;
 async function _initStores(){
   if(!_storeCache){ try{ const m=await import('/lib/store_cache.js'); _storeCache=m.createStoreCache(); }catch(e){} }
-  if(DATA.products.length) gStores=DATA.products.map(p=>({slug:_folderSlug(storeName(p)),name:storeName(p)}));   // instant, from cache
-  _cuApi('action=stores').then(d=>{ if(d&&d.ok&&Array.isArray(d.stores)&&d.stores.length) gStores=d.stores.map(s=>({slug:_folderSlug(s.name),name:s.name})); }).catch(()=>{});   // upgrade to 18, background
+  if(DATA.products.length){ gStores=DATA.products.map(p=>({slug:_folderSlug(storeName(p)),name:storeName(p)})); _fillNavStore(); }   // instant, from cache
+  _cuApi('action=stores').then(d=>{ if(d&&d.ok&&Array.isArray(d.stores)&&d.stores.length){ gStores=d.stores.map(s=>({slug:_folderSlug(s.name),name:s.name})); _fillNavStore(); } }).catch(()=>{});   // upgrade to 18, background
+}
+// Top-nav JUMP-TO navigator (not a filter): picking a store ROUTES into #store/<slug>/storeview from
+// anywhere. Resets to the placeholder after each jump — it launches, it doesn't hold a selection.
+function _fillNavStore(){
+  const sel=$('#navStore'); if(!sel)return;
+  sel.innerHTML='<option value="">Jump to store…</option>'+
+    gStores.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`<option value="${_esc(s.slug)}">${_esc(s.name)}</option>`).join('');
+  sel.value='';
 }
 // Store identity for the header — cached per store (no refetch on return).
 function _storeMeta(slug){
@@ -2897,6 +2907,7 @@ function _cuHeaderRow(){
   return `<div style="display:flex;gap:11px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(127,127,127,.18);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);font-weight:700">
     <span style="width:16px"></span><span style="width:18px"></span>
     <span style="flex:1;min-width:160px">Task</span>
+    <span style="min-width:120px;max-width:200px">Angle</span>
     <span style="min-width:110px">Assignee</span><span style="min-width:60px">Status</span>
     <span style="min-width:52px">Due</span><span>Video</span></div>`;
 }
@@ -2927,6 +2938,7 @@ function _cuRow(t){
         aria-label="details"><i data-lucide="${open?'chevron-down':'chevron-right'}"></i></button>
       <div style="flex:1;min-width:160px"><b style="font-size:13.5px">${_esc(t.name||'Untitled')}</b>
         <span class="ph-sub" style="font-size:11px;margin-left:7px"><code>${_esc(t.id)}</code></span></div>
+      <span class="ph-sub" style="font-size:12px;min-width:120px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(t.angle||'')}">${t.angle?_esc(t.angle):'—'}</span>
       <span class="ph-sub" style="font-size:12px;min-width:110px">${_esc(who)}</span>
       <span class="tag">${_esc(t.status||'—')}</span>
       <span style="font-size:12px;min-width:52px">${_cuFmtDue(t)}</span>
