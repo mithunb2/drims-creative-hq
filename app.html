@@ -1018,11 +1018,17 @@ async function viewStore(){
   if(_subGatedOut(_subById(section))) section='storeview';
   if(_route.tab==='store') setRouteArgs(slug,section);
   const name=_storeNameBySlug(slug);
+  // Store SWITCHER (not a global filter): jump straight to another store's space, KEEPING the current
+  // sub-tab. Lives only here in the store header; it doesn't exist on Overview/Team.
+  const swList=gStores.slice(); if(!swList.some(s=>s.slug===slug)) swList.push({slug,name});
+  const swOpts=swList.sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`<option value="${_esc(s.slug)}"${s.slug===slug?' selected':''}>${_esc(s.name)}</option>`).join('');
   $('#view').innerHTML=`<div class="ss-head">
     <div class="ss-id"><button class="ss-back"><i data-lucide="chevron-left"></i><span>Stores</span></button>
-      <div class="ss-name">${_esc(name)}</div><span class="ss-badge" id="ssBadge">…</span></div>
+      <select class="ss-switch" id="ssSwitch" title="Switch store — keeps this sub-tab">${swOpts}</select>
+      <span class="ss-badge" id="ssBadge">…</span></div>
     <nav class="ss-nav" id="ssNav"></nav></div><div id="ssBody"></div>`;
   $('.ss-back').addEventListener('click',()=>routeTo('stores'));
+  $('#ssSwitch').addEventListener('change',e=>routeTo('store',e.target.value,section));   // switch store, keep section
   const nav=$('#ssNav');
   STORE_SUBTABS.filter(s=>!_subGatedOut(s)).forEach(s=>{
     const b=el(`<button class="ss-tab${s.k===section?' on':''}" data-sec="${s.k}"><i data-lucide="${s.icon}"></i>${_esc(s.label)}</button>`);
@@ -1049,13 +1055,14 @@ function _injectStoreCSS(){
   .ss-head{border:1px solid var(--line,#e5e7eb);border-radius:14px;background:var(--card,#fff);margin:0 0 16px;overflow:hidden}
   .ss-id{display:flex;align-items:center;gap:12px;padding:12px 14px;flex-wrap:wrap}
   .ss-back{display:flex;align-items:center;gap:3px;border:1px solid var(--line,#e5e7eb);background:var(--card,#fff);border-radius:9px;padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--mut,#64748b);flex:none}
-  .ss-name{font-size:18px;font-weight:700;line-height:1.15}
+  .ss-switch{font-size:18px;font-weight:700;line-height:1.15;border:1px solid transparent;background:transparent;color:var(--ink,#111827);cursor:pointer;font-family:inherit;padding:3px 26px 3px 6px;border-radius:9px;max-width:60vw;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>');background-repeat:no-repeat;background-position:right 6px center}
+  .ss-switch:hover{border-color:var(--line,#e5e7eb);background-color:rgba(127,127,127,.06)}
   .ss-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;margin-left:auto}
   .ss-badge.b-ok{background:#dcfce7;color:#15803d}.ss-badge.b-no{background:#fef2f2;color:#dc2626}
   .ss-nav{display:flex;gap:2px;padding:0 8px;border-top:1px solid var(--line,#e5e7eb);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
   .ss-tab{display:flex;align-items:center;gap:6px;background:none;border:none;border-bottom:2px solid transparent;padding:11px 13px;font-size:13px;font-weight:600;color:var(--mut,#64748b);cursor:pointer;white-space:nowrap;flex:none}
   .ss-tab i{width:15px;height:15px;flex:none}.ss-tab.on{color:var(--ink,#111827);border-bottom-color:#7c3aed}
-  @media(max-width:600px){.ss-name{font-size:16px}.ss-id{padding:10px 12px}.ss-badge{margin-left:0;order:3}}`;
+  @media(max-width:600px){.ss-switch{font-size:16px;max-width:52vw}.ss-id{padding:10px 12px}.ss-badge{margin-left:0;order:3}}`;
   document.head.appendChild(s);
 }
 
