@@ -1450,17 +1450,50 @@ function _injectLiveAdsCSS(){
   .la-toggle.on{background:#16a34a;color:#fff}.la-toggle.on .la-knob{transform:translateX(2px)}
   .la-toggle:disabled{opacity:.55;cursor:default}
   .la-status{font-size:12px;color:var(--mut);min-height:16px}
-  .la-warn{color:#b45309}.la-err{font-size:11.5px;color:#dc2626}`;
+  .la-warn{color:#b45309}.la-err{font-size:11.5px;color:#dc2626}
+  .la-perf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 10px;margin:10px 0 2px;padding:9px 0 2px;border-top:1px dashed var(--border,#e5e7eb)}
+  .la-perf-cell{display:flex;flex-direction:column;gap:1px}
+  .la-perf-v{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+  .la-perf-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+  .la-dash{color:var(--mut);cursor:help;font-weight:600}`;
   document.head.appendChild(s);
 }
 
+// ── Performance formatters — the dashes-not-zero contract. A null metric renders "—" with a REASON,
+// never a fake 0. revenue/roas/cpa are null whenever the account isn't reporting purchase VALUE. ──
+const _money=(c)=> c==null?null:('$'+(Number(c)/100).toFixed(2));
+function _perfReason(ad){ return ad.roas_trackable===false
+  ? 'No purchase values tracked for this account — pixel/CAPI Purchase events required.'
+  : 'No purchases attributed in range yet.'; }
+function _dashCell(label,val,reason){ return val==null
+  ? `<div class="la-perf-cell"><span class="la-perf-v la-dash" title="${_esc(reason||'no data')}">—</span><span class="la-perf-l">${label}</span></div>`
+  : `<div class="la-perf-cell"><span class="la-perf-v">${_esc(String(val))}</span><span class="la-perf-l">${label}</span></div>`; }
+function _laPerf(ad){
+  const reason=_perfReason(ad);
+  const roas=ad.roas==null?null:(Number(ad.roas).toFixed(2)+'×');
+  return `<div class="la-perf">
+    ${_dashCell('spend today', _money(ad.spend_today_cents), 'No delivery today yet.')}
+    ${_dashCell('spend lifetime', _money(ad.spend_lifetime_cents), 'No delivery yet.')}
+    ${_dashCell('revenue', _money(ad.revenue_cents), reason)}
+    ${_dashCell('ROAS', roas, reason)}
+    ${_dashCell('CPA', _money(ad.cpa_cents), reason)}
+    ${_dashCell('CPM', _money(ad.cpm_cents), 'No delivery yet.')}
+  </div>`;
+}
 async function viewLiveAds(mount){
   const v=mount||$('#view'); v.innerHTML=''; _injectLiveAdsCSS();
-  const [ads,accts]=await Promise.all([safe('meta_ads'),safe('meta_accounts')]);
+  const [adsAll,accts]=await Promise.all([safe('meta_ads'),safe('meta_accounts')]);
   const acctById={}; (accts||[]).forEach(a=>acctById[a.account_id]=a);
-  v.appendChild(el(`<div class="la-head"><h2><i data-lucide="radio"></i> Live Ads</h2>
-    <p class="la-sub">Flip an ad <b>live</b> (goes ACTIVE on Meta — spends real money, capped by the account's ASL) or <b>pause</b> it. Per-ad, direct control. The <b>ASL is the spend ceiling</b>; an ad can't go live on an account with no spending limit.</p></div>`));
-  if(!ads||!ads.length){ v.appendChild(emptyState('radio','No synced ads yet','Build a PAUSED ad on the account, then run meta_ads_sync — it appears here with a live/pause toggle.')); icons(); return; }
+  // Per-store scoping via the URL hash (#liveads/<account_id>). Picker built from the synced accounts.
+  const acctIds=[...new Set((adsAll||[]).map(a=>a.account_id).concat((accts||[]).map(a=>a.account_id)))].filter(Boolean);
+  let acctSel=_route.a1&&acctIds.includes(_route.a1)?_route.a1:'';
+  if(_route.tab==='liveads')setRouteArgs(acctSel);
+  const ads=acctSel?(adsAll||[]).filter(a=>a.account_id===acctSel):(adsAll||[]);
+  const picker=acctIds.length>1?`<select class="sel" id="laAcct" style="margin-left:auto"><option value="">All accounts</option>${acctIds.map(id=>`<option value="${_esc(id)}"${id===acctSel?' selected':''}>${_esc((acctById[id]||{}).name||id)}</option>`).join('')}</select>`:'';
+  v.appendChild(el(`<div class="la-head"><div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0"><i data-lucide="radio"></i> Live Ads</h2>${picker}</div>
+    <p class="la-sub">Flip an ad <b>live</b> (goes ACTIVE on Meta — spends real money, capped by the account's ASL) or <b>pause</b> it, and read live performance from Meta Insights. The <b>ASL is the spend ceiling</b>; an ad can't go live on an account with no spending limit.</p></div>`));
+  const _la=$('#laAcct'); if(_la)_la.addEventListener('change',e=>{setRouteArgs(e.target.value);viewLiveAds(mount);});
+  if(!ads||!ads.length){ v.appendChild(emptyState('radio','No synced ads yet','Build a PAUSED ad on the account, then meta_ads_sync (now scheduled, every 10 min) surfaces it here with a live/pause toggle and its spend / ROAS / CPA.')); icons(); return; }
   const wrap=el('<div class="la-grid"></div>');
   ads.forEach(ad=>{
     const acct=acctById[ad.account_id]||{};
@@ -1474,6 +1507,7 @@ async function viewLiveAds(mount){
       <div class="la-meta"><span><i data-lucide="megaphone"></i>${_esc(ad.account_id)}</span>
         <span class="${hasAsl?'':'la-noasl'}"><i data-lucide="shield"></i>ASL ${asl}</span>
         <span><i data-lucide="activity"></i>${_esc(ad.effective_status||'?')}</span></div>
+      ${_laPerf(ad)}
       ${ad.last_error?`<div class="la-err">${_esc(ad.last_error)}</div>`:''}</div>`);
     const sw=el(`<button class="la-toggle ${live?'on':'off'}" ${pending?'disabled':''} title="${live?'Pause this ad':'Set LIVE (spends, ASL-capped)'}"><span class="la-knob"></span><span>${live?'Live':'Paused'}</span></button>`);
     const status=el('<div class="la-status"></div>');
